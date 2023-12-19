@@ -1,3 +1,2 @@
 # test_graphic
 
-null
