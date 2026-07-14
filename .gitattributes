@@ -8,3 +8,4 @@
 *.bin filter=lfs diff=lfs merge=lfs -text
 *.gz filter=lfs diff=lfs merge=lfs -text
 lume/LumeEngine/test/fuzztest/image_astc_fuzzer/corpus/*.astc filter=lfs diff=lfs merge=lfs -text
+lume/LumeEngine/test/fuzztest/image_astc_fuzzer/corpus/* filter=lfs diff=lfs merge=lfs -text
