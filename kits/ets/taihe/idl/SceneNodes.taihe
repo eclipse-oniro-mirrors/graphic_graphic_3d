@@ -215,6 +215,7 @@ interface Geometry : Node {
 enum LightType: i32 {
     DIRECTIONAL = 1,
     SPOT = 2,
+    POINT = 3,
     RECT = 4,
 }
 
@@ -266,6 +267,14 @@ interface SpotLight: Light {
     """)
 }
 
+interface PointLight: Light {
+    @!sts_inject_into_class("""
+    get children(): Container<Node> {
+        return new NodeContainerProxy(this.getNodeContainer()) as Container<Node>;
+    }
+    """)
+}
+
 interface DirectionalLight: Light {
     @!sts_inject_into_class("""
     get children(): Container<Node> {
@@ -285,6 +294,7 @@ interface RectLight: Light {
 union LightTypeUnion {
     directional: DirectionalLight;
     spot: SpotLight;
+    point: PointLight;
     rect: RectLight;
     base: Light;
 }

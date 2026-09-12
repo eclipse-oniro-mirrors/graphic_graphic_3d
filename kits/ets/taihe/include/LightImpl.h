@@ -75,6 +75,11 @@ public:
     explicit SpotLightImpl(const std::shared_ptr<LightETS> lightETS);
 };
 
+class PointLightImpl : public LightImpl {
+public:
+    explicit PointLightImpl(const std::shared_ptr<LightETS> lightETS);
+};
+
 class DirectionalLightImpl : public LightImpl {
 public:
     explicit DirectionalLightImpl(const std::shared_ptr<LightETS> lightETS);

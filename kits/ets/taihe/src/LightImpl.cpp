@@ -25,6 +25,9 @@ LightImpl::LightImpl(const std::shared_ptr<LightETS> lightETS) : NodeImpl(lightE
 SpotLightImpl::SpotLightImpl(const std::shared_ptr<LightETS> lightETS) : LightImpl(lightETS)
 {}
 
+PointLightImpl::PointLightImpl(const std::shared_ptr<LightETS> lightETS) : LightImpl(lightETS)
+{}
+
 DirectionalLightImpl::DirectionalLightImpl(const std::shared_ptr<LightETS> lightETS) : LightImpl(lightETS)
 {}
 

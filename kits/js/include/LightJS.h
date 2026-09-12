@@ -111,6 +111,8 @@ public:
     PointLightJS(napi_env, napi_callback_info);
     ~PointLightJS() override;
     void* GetInstanceImpl(uint32_t) override;
+    napi_value GetRange(NapiApi::FunctionContext<>& ctx);
+    void SetRange(NapiApi::FunctionContext<float>& ctx);
 
 private:
     void DisposeNative() override;

@@ -401,7 +401,32 @@ void PointLightJS::Finalize(napi_env env)
 void PointLightJS::Init(napi_env env, napi_value exports)
 {
     BASE_NS::vector<napi_property_descriptor> node_props;
+    node_props.push_back(GetSetProperty<float, PointLightJS, &PointLightJS::GetRange,
+        &PointLightJS::SetRange>("range"));
     BaseLight::Init("PointLight", env, exports, node_props, BaseObject::ctor<PointLightJS>());
+}
+
+napi_value PointLightJS::GetRange(NapiApi::FunctionContext<>& ctx)
+{
+    if (!validateSceneRef("GetRange")) {
+        return ctx.GetUndefined();
+    }
+    float range = 0.0f;
+    if (auto light = interface_cast<SCENE_NS::ILight>(GetNativeObject())) {
+        range = META_NS::GetValue(light->Range());
+    }
+    return ctx.GetNumber(range);
+}
+
+void PointLightJS::SetRange(NapiApi::FunctionContext<float>& ctx)
+{
+    if (!validateSceneRef("SetRange")) {
+        return;
+    }
+    float range = ctx.Arg<0>();
+    if (auto light = interface_cast<SCENE_NS::ILight>(GetNativeObject())) {
+        META_NS::SetValue(light->Range(), range);
+    }
 }
 
 DirectionalLightJS::DirectionalLightJS(napi_env e, napi_callback_info i)
