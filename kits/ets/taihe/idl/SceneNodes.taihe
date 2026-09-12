@@ -215,6 +215,7 @@ interface Geometry : Node {
 enum LightType: i32 {
     DIRECTIONAL = 1,
     SPOT = 2,
+    RECT = 4,
 }
 
 interface Light: Node {
@@ -241,6 +242,15 @@ interface Light: Node {
     @get getRange(): Optional<f64>;
     @set setRange(range: Optional<f64>): void;
 
+    @get getWidth(): Optional<f64>;
+    @set setWidth(width: Optional<f64>): void;
+
+    @get getHeight(): Optional<f64>;
+    @set setHeight(height: Optional<f64>): void;
+
+    @get getTwoSided(): Optional<bool>;
+    @set setTwoSided(twoSided: Optional<bool>): void;
+
     @!sts_inject_into_class("""
     get children(): Container<Node> {
         return new NodeContainerProxy(this.getNodeContainer()) as Container<Node>;
@@ -264,9 +274,18 @@ interface DirectionalLight: Light {
     """)
 }
 
+interface RectLight: Light {
+    @!sts_inject_into_class("""
+    get children(): Container<Node> {
+        return new NodeContainerProxy(this.getNodeContainer()) as Container<Node>;
+    }
+    """)
+}
+
 union LightTypeUnion {
     directional: DirectionalLight;
     spot: SpotLight;
+    rect: RectLight;
     base: Light;
 }
 

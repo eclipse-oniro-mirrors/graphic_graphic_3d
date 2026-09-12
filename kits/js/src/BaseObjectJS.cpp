@@ -59,6 +59,8 @@ BASE_NS::string GetConstructorName(const META_NS::IObject::Ptr& obj)
             name = "PointLight";
         } else if (type == Scene::LightType::SPOT) {
             name = "SpotLight";
+        } else if (type == Scene::LightType::RECT) {
+            name = "RectLight";
         } else {
             name = "Node";
         }

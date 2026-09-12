@@ -28,6 +28,9 @@ SpotLightImpl::SpotLightImpl(const std::shared_ptr<LightETS> lightETS) : LightIm
 DirectionalLightImpl::DirectionalLightImpl(const std::shared_ptr<LightETS> lightETS) : LightImpl(lightETS)
 {}
 
+RectLightImpl::RectLightImpl(const std::shared_ptr<LightETS> lightETS) : LightImpl(lightETS)
+{}
+
 ::SceneNodes::LightType LightImpl::getLightType()
 {
     if (!lightETS_) {
@@ -180,6 +183,72 @@ void LightImpl::setRange(::taihe::optional_view<double> range)
         lightETS_->SetRange(range.value());
     } else {
         lightETS_->SetRange(0.0f);
+    }
+}
+
+::taihe::optional<double> LightImpl::getWidth()
+{
+    if (!lightETS_) {
+        WIDGET_LOGE("Invalid light");
+        return ::taihe::optional<double>(std::nullopt);
+    }
+    return ::taihe::optional<double>(std::in_place, lightETS_->GetWidth());
+}
+
+void LightImpl::setWidth(::taihe::optional_view<double> width)
+{
+    if (!lightETS_) {
+        WIDGET_LOGE("Invalid light");
+        return;
+    }
+    if (width.has_value()) {
+        lightETS_->SetWidth(width.value());
+    } else {
+        lightETS_->SetWidth(0.0f);
+    }
+}
+
+::taihe::optional<double> LightImpl::getHeight()
+{
+    if (!lightETS_) {
+        WIDGET_LOGE("Invalid light");
+        return ::taihe::optional<double>(std::nullopt);
+    }
+    return ::taihe::optional<double>(std::in_place, lightETS_->GetHeight());
+}
+
+void LightImpl::setHeight(::taihe::optional_view<double> height)
+{
+    if (!lightETS_) {
+        WIDGET_LOGE("Invalid light");
+        return;
+    }
+    if (height.has_value()) {
+        lightETS_->SetHeight(height.value());
+    } else {
+        lightETS_->SetHeight(0.0f);
+    }
+}
+
+::taihe::optional<bool> LightImpl::getTwoSided()
+{
+    if (!lightETS_) {
+        WIDGET_LOGE("Invalid light");
+        return ::taihe::optional<bool>(std::nullopt);
+    }
+    return ::taihe::optional<bool>(std::in_place, lightETS_->GetTwoSided());
+}
+
+void LightImpl::setTwoSided(::taihe::optional_view<bool> twoSided)
+{
+    if (!lightETS_) {
+        WIDGET_LOGE("Invalid light");
+        return;
+    }
+    if (twoSided.has_value()) {
+        lightETS_->SetTwoSided(twoSided.value());
+    } else {
+        lightETS_->SetTwoSided(false);
     }
 }
 }  // namespace OHOS::Render3D::KITETS

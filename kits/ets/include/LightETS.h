@@ -39,6 +39,10 @@ public:
          * Point light.
          */
         POINT = 3,
+        /**
+         * Rect area light.
+         */
+        RECT = 4,
     };
 
     LightETS(
@@ -69,6 +73,15 @@ public:
 
     float GetRange();
     void SetRange(float range);
+
+    float GetWidth();
+    void SetWidth(float width);
+
+    float GetHeight();
+    void SetHeight(float height);
+
+    bool GetTwoSided();
+    void SetTwoSided(bool twoSided);
 
 private:
     SCENE_NS::ILight::WeakPtr light_{nullptr};

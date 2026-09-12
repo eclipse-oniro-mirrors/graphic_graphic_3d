@@ -716,6 +716,8 @@ napi_value SceneJS::CreateLight(NapiApi::FunctionContext<NapiApi::Object, uint32
         ctorName = "PointLight";
     } else if (lightType == BaseLight::SPOT) {
         ctorName = "SpotLight";
+    } else if (lightType == BaseLight::RECT) {
+        ctorName = "RectLight";
     } else {
         return Promise(ctx.GetEnv()).Reject("Unknown light type given");
     }

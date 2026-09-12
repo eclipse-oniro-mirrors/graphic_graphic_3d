@@ -40,6 +40,7 @@ void BaseLight::RegisterEnums(NapiApi::Object exports)
     DECL_ENUM(LightType, DIRECTIONAL);
     DECL_ENUM(LightType, POINT);
     DECL_ENUM(LightType, SPOT);
+    DECL_ENUM(LightType, RECT);
 #undef DECL_ENUM
     exports.Set("LightType", LightType);
 }
@@ -471,5 +472,123 @@ void DirectionalLightJS::SetNear(NapiApi::FunctionContext<float>& ctx)
     float near = ctx.Arg<0>();
     if (auto light = interface_cast<SCENE_NS::ILight>(GetNativeObject())) {
         light->NearPlane()->SetValue(near);
+    }
+}
+
+RectLightJS::RectLightJS(napi_env e, napi_callback_info i) : BaseObject(e, i), BaseLight(BaseLight::LightType::RECT)
+{
+    Create(e, i);
+    AddBridge("RectLightJS", NapiApi::FunctionContext(e, i).This());
+    if (auto light = interface_pointer_cast<SCENE_NS::ILight>(GetNativeObject())) {
+        light->Type()->SetValue(SCENE_NS::LightType::RECT);
+    }
+}
+RectLightJS::~RectLightJS()
+{
+    DestroyBridge(this);
+}
+void* RectLightJS::GetInstanceImpl(uint32_t id)
+{
+    if (id == RectLightJS::ID) {
+        return static_cast<RectLightJS*>(this);
+    }
+    if (auto ret = BaseLight::GetInstanceImpl(id)) {
+        return ret;
+    }
+    return BaseObject::GetInstanceImpl(id);
+}
+void RectLightJS::DisposeNative()
+{
+    if (disposed_) {
+        return;
+    }
+    BaseLight::DisposeNative(this);
+    DisposeBridge(this);
+    disposed_ = true;
+}
+void RectLightJS::Finalize(napi_env env)
+{
+    DisposeNative();
+    BaseObject::Finalize(env);
+    FinalizeBridge(this);
+}
+void RectLightJS::Init(napi_env env, napi_value exports)
+{
+    BASE_NS::vector<napi_property_descriptor> node_props;
+    node_props.push_back(
+        GetSetProperty<float, RectLightJS, &RectLightJS::GetWidth, &RectLightJS::SetWidth>("width"));
+    node_props.push_back(
+        GetSetProperty<float, RectLightJS, &RectLightJS::GetHeight, &RectLightJS::SetHeight>("height"));
+    node_props.push_back(
+        GetSetProperty<bool, RectLightJS, &RectLightJS::GetTwoSided, &RectLightJS::SetTwoSided>("twoSided"));
+    BaseLight::Init("RectLight", env, exports, node_props, BaseObject::ctor<RectLightJS>());
+}
+
+napi_value RectLightJS::GetWidth(NapiApi::FunctionContext<>& ctx)
+{
+    if (!validateSceneRef()) {
+        return ctx.GetUndefined();
+    }
+    float width = 0.0f;
+    if (auto light = interface_cast<SCENE_NS::ILight>(GetNativeObject())) {
+        width = META_NS::GetValue(light->RectWidth());
+    }
+    return ctx.GetNumber(width);
+}
+
+void RectLightJS::SetWidth(NapiApi::FunctionContext<float>& ctx)
+{
+    if (!validateSceneRef()) {
+        return;
+    }
+    float width = ctx.Arg<0>();
+    if (auto light = interface_cast<SCENE_NS::ILight>(GetNativeObject())) {
+        META_NS::SetValue(light->RectWidth(), width);
+    }
+}
+
+napi_value RectLightJS::GetHeight(NapiApi::FunctionContext<>& ctx)
+{
+    if (!validateSceneRef()) {
+        return ctx.GetUndefined();
+    }
+    float height = 0.0f;
+    if (auto light = interface_cast<SCENE_NS::ILight>(GetNativeObject())) {
+        height = META_NS::GetValue(light->RectHeight());
+    }
+    return ctx.GetNumber(height);
+}
+
+void RectLightJS::SetHeight(NapiApi::FunctionContext<float>& ctx)
+{
+    if (!validateSceneRef()) {
+        return;
+    }
+    float height = ctx.Arg<0>();
+    if (auto light = interface_cast<SCENE_NS::ILight>(GetNativeObject())) {
+        META_NS::SetValue(light->RectHeight(), height);
+    }
+}
+
+napi_value RectLightJS::GetTwoSided(NapiApi::FunctionContext<>& ctx)
+{
+    if (!validateSceneRef()) {
+        return ctx.GetUndefined();
+    }
+    bool twoSided = false;
+    if (auto light = interface_cast<SCENE_NS::ILight>(GetNativeObject())) {
+        twoSided = META_NS::GetValue(light->RectTwoSided());
+    }
+    return ctx.GetBoolean(twoSided);
+}
+
+void RectLightJS::SetTwoSided(NapiApi::FunctionContext<bool>& ctx)
+{
+    if (!validateSceneRef()) {
+        return;
+    }
+    bool twoSided = ctx.Arg<0>();
+    if (auto light = interface_cast<SCENE_NS::ILight>(GetNativeObject())) {
+        META_NS::SetValue(light->RectTwoSided(), twoSided);
     }
 }

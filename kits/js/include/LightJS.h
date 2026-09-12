@@ -37,6 +37,10 @@ public:
          * Point light.
          */
         POINT = 3,
+        /**
+         * Rect area light.
+         */
+        RECT = 4,
     };
     static void Init(const char* name, napi_env env, napi_value exports,
         BASE_NS::vector<napi_property_descriptor>& node_props, napi_callback ctor);
@@ -107,6 +111,25 @@ public:
     PointLightJS(napi_env, napi_callback_info);
     ~PointLightJS() override;
     void* GetInstanceImpl(uint32_t) override;
+
+private:
+    void DisposeNative() override;
+    void Finalize(napi_env env) override;
+};
+
+class SCENE_ADDON_PUBLIC RectLightJS final : BaseObject, BaseLight {
+public:
+    static constexpr uint32_t ID = 14;
+    static void Init(napi_env env, napi_value exports);
+    RectLightJS(napi_env, napi_callback_info);
+    ~RectLightJS() override;
+    void* GetInstanceImpl(uint32_t) override;
+    napi_value GetWidth(NapiApi::FunctionContext<>& ctx);
+    void SetWidth(NapiApi::FunctionContext<float>& ctx);
+    napi_value GetHeight(NapiApi::FunctionContext<>& ctx);
+    void SetHeight(NapiApi::FunctionContext<float>& ctx);
+    napi_value GetTwoSided(NapiApi::FunctionContext<>& ctx);
+    void SetTwoSided(NapiApi::FunctionContext<bool>& ctx);
 
 private:
     void DisposeNative() override;

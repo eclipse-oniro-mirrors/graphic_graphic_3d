@@ -59,6 +59,15 @@ public:
 
     ::taihe::optional<double> getRange();
     void setRange(::taihe::optional_view<double> range);
+
+    ::taihe::optional<double> getWidth();
+    void setWidth(::taihe::optional_view<double> width);
+
+    ::taihe::optional<double> getHeight();
+    void setHeight(::taihe::optional_view<double> height);
+
+    ::taihe::optional<bool> getTwoSided();
+    void setTwoSided(::taihe::optional_view<bool> twoSided);
 };
 
 class SpotLightImpl : public LightImpl {
@@ -69,6 +78,11 @@ public:
 class DirectionalLightImpl : public LightImpl {
 public:
     explicit DirectionalLightImpl(const std::shared_ptr<LightETS> lightETS);
+};
+
+class RectLightImpl : public LightImpl {
+public:
+    explicit RectLightImpl(const std::shared_ptr<LightETS> lightETS);
 };
 }  // namespace OHOS::Render3D::KITETS
 #endif  // OHOS_3D_LIGHT_IMPL_H
