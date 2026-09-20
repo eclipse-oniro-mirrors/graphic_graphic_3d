@@ -114,7 +114,10 @@ ohos_source_set("scene_adapter_source") {
     "src/offscreen_scene.cpp",
     "src/surface_stream.cpp",
     "src/mrt_depth_adapter.cpp",
-    "src/camera_utils.cpp"
+    "src/camera_utils.cpp",
+    "src/frame_signal_scope.cpp",
+    "src/surface_buffer_owner.cpp",
+    "src/frame_hook_registry.cpp"
   ]
 
   include_dirs = [
