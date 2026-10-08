@@ -99,7 +99,7 @@ void SurfaceBufferOwner::Cache(BASE_NS::shared_ptr<BufferCacheEntry> entry)
     // comment for the eviction timing).
     if (cache_.size() > 1) {
         auto lastIt = std::prev(cache_.end());
-        for (auto it = cache_.begin(); it != lastIt; ) {
+        for (auto it = cache_.begin(); it != lastIt;) {
             if (*it) {
                 ReleaseEntryLocked(*it);
             }
