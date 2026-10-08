@@ -22,16 +22,15 @@
 
 namespace OHOS::Render3D {
 
-/// Allocates unique signal handle ids for FrameSignalScope instances.
-///
-/// Process-wide singleton: one monotonic counter backs all signal handles,
-/// so ids never collide in the per-frame GetFrameGpuSignalData() list (a
-/// collision would export the wrong owner's semaphore in TryExportFd()).
-/// The high byte (0xBB) marks the ids as synthetic, outside the range of
-/// real GPU resources.
+// Allocates unique signal handle ids for FrameSignalScope instances.
+// Process-wide singleton: one monotonic counter backs all signal handles,
+// so ids never collide in the per-frame GetFrameGpuSignalData() list (a
+// collision would export the wrong owner's semaphore in TryExportFd()).
+// The high byte (0xBB) marks the ids as synthetic, outside the range of
+// real GPU resources.
 class FrameSignalHandleAllocator {
 public:
-    /// Access the process-wide singleton. Thread-safe.
+    // Access the process-wide singleton. Thread-safe.
     static FrameSignalHandleAllocator& Instance()
     {
         static FrameSignalHandleAllocator instance;
@@ -43,7 +42,7 @@ public:
     FrameSignalHandleAllocator(FrameSignalHandleAllocator&&) = delete;
     FrameSignalHandleAllocator& operator=(FrameSignalHandleAllocator&&) = delete;
 
-    /// Allocate a unique signal handle. Thread-safe.
+    // Allocate a unique signal handle. Thread-safe.
     RENDER_NS::RenderHandleReference Alloc()
     {
         // High byte is tag; low 56 bits is global monotonic counter.
@@ -56,9 +55,9 @@ private:
     FrameSignalHandleAllocator() = default;
     ~FrameSignalHandleAllocator() = default;
 
-    /// High-byte tag marking ids as synthetic.
+    // High-byte tag marking ids as synthetic.
     static constexpr uint64_t FRAME_SIGNAL_HANDLE_TAG{0xBB00000000000000ULL};
-    /// Mask for the monotonic counter in the low 56 bits.
+    // Mask for the monotonic counter in the low 56 bits.
     static constexpr uint64_t FRAME_SIGNAL_OWNER_ID_MASK{0x00FFFFFFFFFFFFFFULL};
 
     std::atomic<uint64_t> nextId_{1};
