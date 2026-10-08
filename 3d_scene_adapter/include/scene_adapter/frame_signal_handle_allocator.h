@@ -46,7 +46,7 @@ public:
     /// Allocate a unique signal handle. Thread-safe.
     RENDER_NS::RenderHandleReference Alloc()
     {
-        // High byte = tag; low 56 bits = global monotonic counter.
+        // High byte is tag; low 56 bits is global monotonic counter.
         const uint64_t id = FRAME_SIGNAL_HANDLE_TAG |
             (nextId_.fetch_add(1, std::memory_order_relaxed) & FRAME_SIGNAL_OWNER_ID_MASK);
         return RENDER_NS::RenderHandleReference{{id}, {}};
