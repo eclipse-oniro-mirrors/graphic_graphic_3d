@@ -15,6 +15,9 @@
 
 #include "scene_adapter/surface_stream.h"
 
+#include "scene_adapter/frame_hook_registry.h"
+
+#include <unistd.h>
 #include <vector>
 
 #include <3d/ecs/components/environment_component.h>
@@ -61,22 +64,9 @@ namespace OHOS::Render3D {
 
 namespace {
 static constexpr uint32_t WAIT_FENCE_TIME = 5000;
-static constexpr uint32_t MAX_BUFFER_SIZE = 3;
 static constexpr uint32_t MAX_IMAGE_EXTENT = 32768U;
-static constexpr uint32_t SURFACE_QUEUE_SIZE = 5;
-
-// RAII guard to ensure the acquired surface buffer is released when not cached.
-struct ReleaseGuard {
-    OHOS::sptr<OHOS::IConsumerSurface> surface = nullptr;
-    OHOS::sptr<OHOS::SurfaceBuffer> buffer = nullptr;
-    bool shouldRelease = true;
-    ~ReleaseGuard()
-    {
-        if (shouldRelease && surface && buffer) {
-            surface->ReleaseBuffer(buffer, OHOS::SyncFence::INVALID_FENCE);
-        }
-    }
-};
+// Queue size 3 = 2 cached consumer buffers + 1 free slot for the producer.
+static constexpr uint32_t SURFACE_QUEUE_SIZE = 3;
 
 OH_NativeBuffer_ColorSpace ConvertColorGamutToColorSpace(OHOS::GraphicColorGamut colorGamut)
 {
@@ -131,6 +121,10 @@ bool SurfaceStream::Build(const META_NS::IMetadata::Ptr& metadata)
     }
 
     engineQueue_ = context->GetRenderQueue();
+    if (engineQueue_ == nullptr) {
+        CORE_LOG_E("get render queue failed");
+        return false;
+    }
     std::lock_guard<std::mutex> lock(renderContextMutex_);
     renderContext_ = context->GetRenderer();
     if (renderContext_) {
@@ -197,41 +191,56 @@ bool SurfaceStream::DetachFrom(const META_NS::IAttach::Ptr& target)
 
 bool SurfaceStream::Init()
 {
-    std::lock_guard<std::mutex> lock(consumerSurfaceMutex_);
-    consumerSurface_ = OHOS::IConsumerSurface::Create("LumeSurfaceConsumer");
-    if (consumerSurface_ == nullptr) {
+    auto consumerSurface = OHOS::IConsumerSurface::Create("LumeSurfaceConsumer");
+    if (consumerSurface == nullptr) {
         CORE_LOG_E("create surface consumer failed");
         return false;
     }
-    auto producer = consumerSurface_->GetProducer();
+    auto producer = consumerSurface->GetProducer();
     if (producer == nullptr) {
         CORE_LOG_E("create surface producer failed");
-        // Release the consumer surface created above to avoid resource leak.
-        consumerSurface_ = nullptr;
         return false;
     }
     producerSurface_ = OHOS::Surface::CreateSurfaceAsProducer(producer);
     auto utils = OHOS::SurfaceUtils::GetInstance();
     if (producerSurface_ == nullptr || utils == nullptr) {
         CORE_LOG_E("get producer surface or utils failed");
-        // Release partially created resources to avoid leak.
         producerSurface_ = nullptr;
-        consumerSurface_ = nullptr;
         return false;
     }
     producerSurface_->SetQueueSize(SURFACE_QUEUE_SIZE);
     surfaceId_.store(producerSurface_->GetUniqueId(), std::memory_order_relaxed);
     utils->Add(surfaceId_.load(std::memory_order_relaxed), producerSurface_);
-    consumerSurface_->RegisterConsumerListener(this);
+
+    // SurfaceBufferOwner owns the consumer surface and buffer lifecycle.
+    bufferOwner_ = std::make_unique<SurfaceBufferOwner>(consumerSurface);
+    consumerSurface->RegisterConsumerListener(this);
+
+    // Frame hook registration lets the render loop (SceneAdapter) invoke
+    // PreRender/PostRender to produce release fences. The no-op-deleter
+    // holder initializes the std control block for weak_from_this().
+    if (!selfHookHolder_) {
+        selfHookHolder_ = std::shared_ptr<IFrameHook>(static_cast<IFrameHook*>(this), [](IFrameHook*) {});
+    }
+    FrameHookRegistry::Instance().Register(weak_from_this());
 
     return true;
 }
 
 void SurfaceStream::Deinit()
 {
-    std::lock_guard<std::mutex> lock(consumerSurfaceMutex_);
-    if (consumerSurface_) {
-        consumerSurface_->UnregisterConsumerListener();
+    // Unregister first (parks on the registry mutex until any render pass
+    // finishes), then tear down.
+    FrameHookRegistry::Instance().Unregister(weak_from_this());
+
+    if (bufferOwner_) {
+        auto surface = bufferOwner_->GetSurface();
+        if (surface) {
+            auto ret = surface->UnregisterConsumerListener();
+            if (ret != GSERROR_OK) {
+                CORE_LOG_E("unregister consumer listener failed");
+            }
+        }
     }
 
     auto utils = OHOS::SurfaceUtils::GetInstance();
@@ -241,50 +250,57 @@ void SurfaceStream::Deinit()
     surfaceId_.store(0, std::memory_order_relaxed);
 
     producerSurface_ = nullptr;
-    consumerSurface_ = nullptr;
+    // ~SurfaceBufferOwner() calls ReleaseAll().
+    bufferOwner_.reset();
 }
 
 void SurfaceStream::OnBufferAvailable()
 {
+    if (engineQueue_ == nullptr) {
+        CORE_LOG_E("engineQueue is nullptr");
+        return;
+    }
     META_NS::AddFutureTaskOrRunDirectly(engineQueue_, [this]() { ProcessBufferAvailable(); }).Wait();
 }
 
 void SurfaceStream::ProcessBufferAvailable()
 {
-    OHOS::sptr<OHOS::IConsumerSurface> localConsumerSurface = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(consumerSurfaceMutex_);
-        if (consumerSurface_ == nullptr) {
-            CORE_LOG_E("invalid consumer surface");
-            return;
-        }
-        localConsumerSurface = consumerSurface_;
+    if (!bufferOwner_) {
+        CORE_LOG_E("invalid buffer owner");
+        return;
     }
 
     OHOS::sptr<OHOS::SurfaceBuffer> acquireSurfaceBuffer = nullptr;
     OHOS::sptr<OHOS::SyncFence> acquireFence = OHOS::SyncFence::INVALID_FENCE;
     int64_t timestamp = 0;
     OHOS::Rect damage = {0, 0, 0, 0};
-    auto success = localConsumerSurface->AcquireBuffer(acquireSurfaceBuffer, acquireFence, timestamp, damage);
-    if ((success != OHOS::SURFACE_ERROR_OK) || acquireSurfaceBuffer == nullptr ||
-        acquireFence == nullptr || !acquireFence->IsValid()) {
-        CORE_LOG_E("consumer surface acquire surface buffer failed: %d", success);
+    if (!bufferOwner_->Acquire(acquireSurfaceBuffer, acquireFence, timestamp, damage)) {
         return;
     }
 
-    // RAII guard ensures the acquired buffer is released on any early return
-    // (e.g. native buffer conversion failure) or exception before it is cached.
-    ReleaseGuard guard { localConsumerSurface, acquireSurfaceBuffer };
-
-    int32_t fenceStatus = acquireFence->Wait(WAIT_FENCE_TIME);
-    if (fenceStatus != 0) {
-        CORE_LOG_E("acquire fence wait failed or timed out, status: %d", fenceStatus);
-        return;
+    // Wait on the acquire fence (GPU-side preferred, CPU fallback).
+    {
+        BASE_NS::shared_ptr<RENDER_NS::IRenderContext> localCtx;
+        {
+            std::lock_guard<std::mutex> lock(renderContextMutex_);
+            localCtx = renderContext_;
+        }
+        auto waitResult = WaitAcquireFence(localCtx, acquireFence, WAIT_FENCE_TIME);
+        // Drop the SyncFence: WaitAcquireFence fully manages the fence fd
+        // (dups and closes it internally), so dropping it only closes the
+        // original fd.
+        acquireFence = OHOS::SyncFence::INVALID_FENCE;
+        if (waitResult != AcquireFenceWaitResult::GPU_WAITED && waitResult != AcquireFenceWaitResult::CPU_WAITED) {
+            CORE_LOG_E("wait acquire fence failed, release buffer");
+            bufferOwner_->ReleaseImmediate(acquireSurfaceBuffer);
+            return;
+        }
     }
 
     OH_NativeBuffer* nativeBuffer = acquireSurfaceBuffer->SurfaceBufferToNativeBuffer();
     if (nativeBuffer == nullptr) {
         CORE_LOG_E("surface buffer to native buffer failed");
+        bufferOwner_->ReleaseImmediate(acquireSurfaceBuffer);
         return;
     }
     uint32_t width = static_cast<uint32_t>(acquireSurfaceBuffer->GetSurfaceBufferWidth());
@@ -294,20 +310,54 @@ void SurfaceStream::ProcessBufferAvailable()
 
     UpdateView(nativeBuffer, width, height, acquireSurfaceBuffer->GetSurfaceBufferColorGamut());
 
-    {
-        std::lock_guard<std::mutex> lock(surfaceBufferCacheMutex_);
-        if (surfaceBufferCache_.size() >= MAX_BUFFER_SIZE) {
-            auto oldSurfaceBuffer = surfaceBufferCache_.front();
-            surfaceBufferCache_.pop();
-            if (oldSurfaceBuffer) {
-                localConsumerSurface->ReleaseBuffer(oldSurfaceBuffer, OHOS::SyncFence::INVALID_FENCE);
-            }
-        }
-        surfaceBufferCache_.push(acquireSurfaceBuffer);
-        // Only cancel the release guard after the buffer is safely cached, so
-        // that a push failure still releases the buffer via the guard.
-        guard.shouldRelease = false;
+    // Bind one signal handle to this buffer for its whole cache lifetime: it
+    // is re-registered every frame in PreRender and the release fence fd is
+    // attached to the same entry in PostRender (1 buffer : 1 handle).
+    RENDER_NS::RenderHandleReference signalHandle = FrameSignalHandleAllocator::Instance().Alloc();
+    bufferOwner_->Cache(BASE_NS::make_shared<BufferCacheEntry>(acquireSurfaceBuffer, signalHandle));
+}
+
+void SurfaceStream::PreRender(RENDER_NS::IRenderContext& ctx)
+{
+    if (!bufferOwner_) {
+        CORE_LOG_E("%s bufferOwner is nullptr", __func__);
+        return;
     }
+
+    // Re-register the handle bound to the latest cached buffer. The handle
+    // was allocated once when the buffer arrived and stays valid across
+    // frames: RenderFrameUtil::AddGpuSignal creates a fresh semaphore per
+    // frame and matches entries by handle only within that frame.
+    RENDER_NS::RenderHandleReference handle;
+    if (!bufferOwner_->GetLatestSignalHandle(handle)) {
+        // No cached buffer to sample; nothing to guard.
+        CORE_LOG_E("%s get latest signal handle failed", __func__);
+        return;
+    }
+    frameSignalScope_.emplace(handle);
+    frameSignalScope_->Register(ctx);
+}
+
+void SurfaceStream::PostRender(RENDER_NS::IRenderContext& ctx)
+{
+    if (!frameSignalScope_.has_value()) {
+        // PreRender did not register a signal (no cached buffer).
+        CORE_LOG_E("%s frameSignalScope not register a signal", __func__);
+        return;
+    }
+    // Export the release fence fd (ownership transfers) and attach it to the
+    // cache entry bound to this handle; consumed when the entry is released.
+    // An idle frame yields -1 and keeps any previously stored fd.
+    int32_t releaseFd = frameSignalScope_->TryExportFd(ctx);
+    if (bufferOwner_) {
+        bufferOwner_->SetReleaseFenceFd(frameSignalScope_->GetHandle(), releaseFd);
+    } else if (releaseFd >= 0) {
+        // Teardown raced with this frame: no cache entry owns the exported
+        // fd anymore, close it here to avoid a leak.
+        CORE_LOG_E("%s bufferOwner is nullptr, close releaseFd:%d", __func__, releaseFd);
+        close(releaseFd);
+    }
+    frameSignalScope_.reset();
 }
 
 void SurfaceStream::UpdateView(
@@ -381,31 +431,7 @@ void SurfaceStream::UpdateRenderResourceHandle(const RENDER_NS::RenderHandleRefe
 
 SurfaceStream::~SurfaceStream()
 {
-    // Collect cached buffers under the cache lock, then release them under the
-    // consumer surface lock separately. This avoids nested locking
-    // (surfaceBufferCacheMutex_ -> consumerSurfaceMutex_) whose order is the
-    // reverse of ProcessBufferAvailable() (consumerSurfaceMutex_ ->
-    // surfaceBufferCacheMutex_), which would otherwise risk a deadlock.
-    std::vector<OHOS::sptr<OHOS::SurfaceBuffer>> pendingRelease;
-    {
-        std::lock_guard<std::mutex> lock(surfaceBufferCacheMutex_);
-        while (!surfaceBufferCache_.empty()) {
-            pendingRelease.push_back(std::move(surfaceBufferCache_.front()));
-            surfaceBufferCache_.pop();
-        }
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(consumerSurfaceMutex_);
-        if (consumerSurface_) {
-            for (auto& oldSurfaceBuffer : pendingRelease) {
-                if (oldSurfaceBuffer != nullptr) {
-                    consumerSurface_->ReleaseBuffer(oldSurfaceBuffer, OHOS::SyncFence::INVALID_FENCE);
-                }
-            }
-        }
-    }
-
+    // Deinit() unregisters the hook/listener and releases all cached buffers.
     Deinit();
 
     {

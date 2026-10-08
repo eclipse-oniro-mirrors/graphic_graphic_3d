@@ -3119,7 +3119,11 @@ DeviceGLES::PlatformGpuFence DeviceGLES::CreatePlatformGpuFence()
         return fence;
     }
     fence.nativeFence = true;
+<<<<<<< HEAD
     // no native fence fd attribute, so EGL owns the fd and it can be duplicated out later
+=======
+    // no EGL_SYNC_NATIVE_FENCE_FD_ANDROID attribute, so EGL owns the fd and it can be duplicated out later
+>>>>>>> 196548966bdbbb55a7157679366fb34752b6ed6d
     EGLSyncKHR sync = eglCreateSyncKHR(platData.display, EGL_SYNC_NATIVE_FENCE_ANDROID, nullptr);
     if (sync == EGL_NO_SYNC_KHR) {
         PLUGIN_LOG_E("eglCreateSyncKHR EGL_SYNC_NATIVE_FENCE_ANDROID failed %d", eglGetError());

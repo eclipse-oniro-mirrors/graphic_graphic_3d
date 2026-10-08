@@ -528,7 +528,15 @@ void RenderBackendVk::ProcessExternalWaitSemaphoreDestroy()
     const VkDevice device = deviceVk_.GetPlatformDataVk().device;
     for (auto iter = externalWaitSemaphores_.begin(); iter != externalWaitSemaphores_.end();) {
         if (iter->frameIndex < ageLimit) {
+<<<<<<< HEAD
             DestroySemaphores(device, iter->semaphores);
+=======
+            for (const auto semaphore : iter->semaphores) {
+                if (semaphore != VK_NULL_HANDLE) {
+                    vkDestroySemaphore(device, semaphore, nullptr);
+                }
+            }
+>>>>>>> 196548966bdbbb55a7157679366fb34752b6ed6d
             iter = externalWaitSemaphores_.erase(iter);
         } else {
             ++iter;
