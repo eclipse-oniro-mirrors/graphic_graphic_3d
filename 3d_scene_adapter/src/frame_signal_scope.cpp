@@ -56,8 +56,8 @@ int32_t FrameSignalScope::TryExportFd(RENDER_NS::IRenderContext& ctx)
     using ExportResult = RENDER_NS::IRenderFrameUtil::ExportResult;
 
     auto& renderFrameUtil = ctx.GetRenderUtil().GetRenderFrameUtil();
-    // The util owns the backend specifics (Vulkan semaphore fd export, GLES
-    // eglDupNativeFenceFDANDROID) and the export-once bookkeeping.
+    // The util owns the backend-specific export details (semaphore fd on
+    // Vulkan, native fence fd on GLES) and the export-once bookkeeping.
     const RENDER_NS::IRenderFrameUtil::NativeFence fence = renderFrameUtil.ExportFrameGpuSignal(handle_);
     switch (fence.result) {
         case ExportResult::EXPORTED:
