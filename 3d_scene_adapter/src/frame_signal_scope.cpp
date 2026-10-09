@@ -89,7 +89,7 @@ int32_t FrameSignalScope::TryExportFd(RENDER_NS::IRenderContext& ctx)
 AcquireFenceWaitResult WaitAcquireFence(const BASE_NS::shared_ptr<RENDER_NS::IRenderContext>& ctx,
     const OHOS::sptr<OHOS::SyncFence>& acquireFence, uint32_t timeoutMs)
 {
-    if (!acquireFence) {
+    if (!acquireFence || !acquireFence->IsValid()) {
         CORE_LOG_E("%s acquireFence is null", __func__);
         return AcquireFenceWaitResult::SKIPPED;
     }

@@ -63,7 +63,6 @@
 namespace OHOS::Render3D {
 
 namespace {
-static constexpr uint32_t WAIT_FENCE_TIME = 5000;
 static constexpr uint32_t MAX_IMAGE_EXTENT = 32768U;
 // Queue size 3 = 2 cached consumer buffers + 1 free slot for the producer.
 static constexpr uint32_t SURFACE_QUEUE_SIZE = 3;
@@ -285,7 +284,7 @@ void SurfaceStream::ProcessBufferAvailable()
             std::lock_guard<std::mutex> lock(renderContextMutex_);
             localCtx = renderContext_;
         }
-        auto waitResult = WaitAcquireFence(localCtx, acquireFence, WAIT_FENCE_TIME);
+        auto waitResult = WaitAcquireFence(localCtx, acquireFence);
         // Drop the SyncFence: WaitAcquireFence fully manages the fence fd
         // (dups and closes it internally), so dropping it only closes the
         // original fd.
