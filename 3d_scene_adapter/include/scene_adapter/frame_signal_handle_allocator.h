@@ -18,7 +18,7 @@
 
 #include <atomic>
 
-#include <render/resource_handle.h>
+#include "render/resource_handle.h"
 
 namespace OHOS::Render3D {
 
@@ -39,8 +39,8 @@ public:
 
     FrameSignalHandleAllocator(const FrameSignalHandleAllocator&) = delete;
     FrameSignalHandleAllocator& operator=(const FrameSignalHandleAllocator&) = delete;
-    FrameSignalHandleAllocator(FrameSignalHandleAllocator&&) = delete;
-    FrameSignalHandleAllocator& operator=(FrameSignalHandleAllocator&&) = delete;
+    FrameSignalHandleAllocator(const FrameSignalHandleAllocator&&) = delete;
+    FrameSignalHandleAllocator& operator=(const FrameSignalHandleAllocator&&) = delete;
 
     // Allocate a unique signal handle. Thread-safe.
     RENDER_NS::RenderHandleReference Alloc()

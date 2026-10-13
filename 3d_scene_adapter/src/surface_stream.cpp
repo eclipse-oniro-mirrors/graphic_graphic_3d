@@ -15,50 +15,46 @@
 
 #include "scene_adapter/surface_stream.h"
 
-#include "scene_adapter/frame_hook_registry.h"
-
-#include <unistd.h>
 #include <vector>
 
-#include <3d/ecs/components/environment_component.h>
-#include <3d/ecs/components/render_handle_component.h>
+#include "3d/ecs/components/environment_component.h"
+#include "3d/ecs/components/render_handle_component.h"
 
-#include <core/image/intf_image_loader_manager.h>
-#include <core/intf_engine.h>
-#include <core/plugin/intf_class_register.h>
+#include "core/image/intf_image_loader_manager.h"
+#include "core/intf_engine.h"
+#include "core/plugin/intf_class_register.h"
 
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
-#include <GLES2/gl2.h>
-#include <GLES2/gl2ext.h>
-#include <GLES3/gl31.h>
+#include "EGL/egl.h"
+#include "EGL/eglext.h"
+#include "GLES2/gl2.h"
+#include "GLES2/gl2ext.h"
+#include "GLES3/gl31.h"
 
-#include <ibuffer_consumer_listener.h>
-#include <iconsumer_surface.h>
+#include "ibuffer_consumer_listener.h"
+#include "iconsumer_surface.h"
 
-#include <render/device/intf_gpu_resource_manager.h>
-#include <render/device/intf_shader_manager.h>
+#include "render/device/intf_gpu_resource_manager.h"
+#include "render/device/intf_shader_manager.h"
 #if RENDER_HAS_GLES_BACKEND || RENDER_HAS_GL_BACKEND
-#include <render/gles/intf_device_gles.h>
+#include "render/gles/intf_device_gles.h"
 #endif
-#include <render/implementation_uids.h>
-#include <render/intf_render_context.h>
+#include "render/implementation_uids.h"
+#include "render/intf_render_context.h"
 #if RENDER_HAS_VULKAN_BACKEND
-#include <render/vulkan/intf_device_vk.h>
+#include "render/vulkan/intf_device_vk.h"
 #endif
 
-#include <scene/ext/intf_ecs_context.h>
-#include <scene/ext/intf_ecs_object_access.h>
-#include <scene/ext/intf_ecs_object.h>
-#include <scene/ext/intf_render_resource.h>
-#include <scene/ext/util.h>
-#include <scene/interface/intf_application_context.h>
-#include <scene/interface/intf_image.h>
-#include <surface_buffer.h>
-#include <surface_utils.h>
-#include <sync_fence.h>
-
-#include <window.h>
+#include "scene/ext/intf_ecs_context.h"
+#include "scene/ext/intf_ecs_object_access.h"
+#include "scene/ext/intf_ecs_object.h"
+#include "scene/ext/intf_render_resource.h"
+#include "scene/ext/util.h"
+#include "scene/interface/intf_application_context.h"
+#include "scene/interface/intf_image.h"
+#include "scene_adapter/frame_hook_registry.h"
+#include "surface_buffer.h"
+#include "surface_utils.h"
+#include "sync_fence.h"
 
 namespace OHOS::Render3D {
 
@@ -344,17 +340,18 @@ void SurfaceStream::PostRender(RENDER_NS::IRenderContext& ctx)
         CORE_LOG_E("%s frameSignalScope not register a signal", __func__);
         return;
     }
-    // Export the release fence fd (ownership transfers) and attach it to the
-    // cache entry bound to this handle; consumed when the entry is released.
-    // An idle frame yields -1 and keeps any previously stored fd.
-    int32_t releaseFd = frameSignalScope_->TryExportFd(ctx);
+    // Export the release fence (the SyncFence owns its fd) and attach it to
+    // the cache entry bound to this handle; consumed when the entry is
+    // released. An idle frame yields an invalid fence and keeps any
+    // previously stored fence.
+    OHOS::sptr<OHOS::SyncFence> releaseFence = frameSignalScope_->TryExportFd(ctx);
     if (bufferOwner_) {
-        bufferOwner_->SetReleaseFenceFd(frameSignalScope_->GetHandle(), releaseFd);
-    } else if (releaseFd >= 0) {
+        bufferOwner_->SetReleaseFence(frameSignalScope_->GetHandle(), releaseFence);
+    } else {
         // Teardown raced with this frame: no cache entry owns the exported
-        // fd anymore, close it here to avoid a leak.
-        CORE_LOG_E("%s bufferOwner is nullptr, close releaseFd:%d", __func__, releaseFd);
-        close(releaseFd);
+        // fence anymore. The local sptr is the last reference, so the fence
+        // closes its own fd on destruction; nothing to do.
+        CORE_LOG_E("%s bufferOwner is nullptr, fence dropped (fd auto-closed)", __func__);
     }
     frameSignalScope_.reset();
 }

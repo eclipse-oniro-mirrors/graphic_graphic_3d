@@ -19,25 +19,24 @@
 #include <cstdint>
 #include <list>
 #include <mutex>
-#include <unistd.h>
 
-#include <base/containers/shared_ptr.h>
-#include <iconsumer_surface.h>
-#include <surface_buffer.h>
-#include <surface_utils.h>
-#include <sync_fence.h>
-
-#include <render/intf_render_context.h>
-#include <render/resource_handle.h>
+#include "base/containers/shared_ptr.h"
+#include "iconsumer_surface.h"
+#include "render/intf_render_context.h"
+#include "render/resource_handle.h"
+#include "surface_buffer.h"
+#include "surface_utils.h"
+#include "sync_fence.h"
 
 namespace OHOS::Render3D {
 
 // One acquired surface buffer plus the artifacts that pair it with its
 // release fence: a signal handle bound 1:1 at construction time (allocated
 // once in ProcessBufferAvailable, reused by every PreRender/PostRender cycle
-// while this buffer lives) and the fd exported in PostRender (matched by
-// handle, ownership transferred). Storing them together pairs each fd with
-// the correct buffer on release.
+// while this buffer lives) and the SyncFence exported in PostRender (matched
+// by handle, ownership transferred). Storing them together pairs each fence
+// with the correct buffer on release. The SyncFence owns its fd: the last
+// sptr reference drop closes it, no manual close() anywhere.
 class BufferCacheEntry {
 public:
     BufferCacheEntry(OHOS::sptr<OHOS::SurfaceBuffer> surfaceBuffer,
@@ -46,48 +45,47 @@ public:
     {
     }
 
-    ~BufferCacheEntry()
-    {
-        if (releaseFenceFd_ >= 0) {
-            close(releaseFenceFd_);
-        }
-    }
+    ~BufferCacheEntry() = default;
 
     BufferCacheEntry(const BufferCacheEntry&) = delete;
     BufferCacheEntry& operator=(const BufferCacheEntry&) = delete;
+    BufferCacheEntry(const BufferCacheEntry&&) = delete;
+    BufferCacheEntry& operator=(const BufferCacheEntry&&) = delete;
 
     OHOS::sptr<OHOS::SurfaceBuffer> GetSurfaceBuffer() const { return surfaceBuffer_; }
     const RENDER_NS::RenderHandleReference& GetSignalHandle() const { return signalHandle_; }
 
-    // Store the release fence fd. Takes ownership of fd (no dup; the entry
-    // closes or releases it). A negative fd is ignored: an idle frame
-    // exports no fence and the previously stored fd still covers the last
-    // real GPU work on this buffer.
-    void SetReleaseFenceFd(int32_t fd)
+    // Store the release fence. Shares ownership via sptr (no dup, no close:
+    // the fence closes its own fd when the last reference drops). An invalid
+    // fence (null or !IsValid(), e.g. an idle frame) is ignored: the
+    // previously stored fence still covers the last real GPU work on this
+    // buffer.
+    void SetReleaseFence(const OHOS::sptr<OHOS::SyncFence>& fence)
     {
-        if (fd < 0) {
+        if (fence == nullptr || !fence->IsValid()) {
             return;
         }
-        if (releaseFenceFd_ >= 0) {
-            close(releaseFenceFd_);
-        }
-        releaseFenceFd_ = fd;
+        // The old fence (if any) is released by the sptr assignment itself.
+        releaseFence_ = fence;
     }
 
-    // Consume the release fence fd (transfers ownership, sets to -1).
-    int32_t ConsumeReleaseFenceFd()
+    // Consume the release fence (transfers the reference, resets to
+    // INVALID_FENCE).
+    OHOS::sptr<OHOS::SyncFence> ConsumeReleaseFence()
     {
-        int32_t fd = releaseFenceFd_;
-        releaseFenceFd_ = -1;
-        return fd;
+        OHOS::sptr<OHOS::SyncFence> fence = releaseFence_;
+        releaseFence_ = OHOS::SyncFence::INVALID_FENCE;
+        return fence;
     }
 
 private:
     OHOS::sptr<OHOS::SurfaceBuffer> surfaceBuffer_{nullptr};
     // Signal handle bound 1:1 to this buffer at construction; pairs the
-    // buffer with its release fence fd.
+    // buffer with its release fence.
     RENDER_NS::RenderHandleReference signalHandle_;
-    int32_t releaseFenceFd_{-1};
+    // Release fence exported in PostRender; owns its fd via UniqueFd.
+    // INVALID_FENCE (fd = -1) means the buffer was never rendered.
+    OHOS::sptr<OHOS::SyncFence> releaseFence_{OHOS::SyncFence::INVALID_FENCE};
 };
 
 // Owns the buffer lifecycle (acquire, cache, release) for one consumer
@@ -102,6 +100,8 @@ public:
 
     SurfaceBufferOwner(const SurfaceBufferOwner&) = delete;
     SurfaceBufferOwner& operator=(const SurfaceBufferOwner&) = delete;
+    SurfaceBufferOwner(const SurfaceBufferOwner&&) = delete;
+    SurfaceBufferOwner& operator=(const SurfaceBufferOwner&&) = delete;
 
     // Swap the consumer surface (releasing everything cached for the old one).
     void SetSurface(OHOS::sptr<OHOS::IConsumerSurface> surface);
@@ -129,21 +129,23 @@ public:
     // Returns false when no entry is cached.
     bool GetLatestSignalHandle(RENDER_NS::RenderHandleReference& outHandle) const;
 
-    // Store the release fence fd on the entry whose signal handle matches.
-    // Ownership of fd transfers to the entry (no dup). A negative fd keeps
-    // the entry's previously stored fd.
-    void SetReleaseFenceFd(const RENDER_NS::RenderHandleReference& handle, int32_t fd);
+    // Store the release fence on the entry whose signal handle matches.
+    // Ownership is shared via sptr (no dup, no close). An invalid fence keeps
+    // the entry's previously stored fence.
+    void SetReleaseFence(const RENDER_NS::RenderHandleReference& handle,
+        const OHOS::sptr<OHOS::SyncFence>& fence);
 
 private:
-    // Release one entry with its release fence fd (or INVALID_FENCE).
+    // Release one entry with its release fence (or INVALID_FENCE).
     // Caller must hold mutex_.
     void ReleaseEntryLocked(BASE_NS::shared_ptr<BufferCacheEntry> entry);
 
-    // Drain the cache and release everything with INVALID_FENCE; any
-    // stored release fence fd is closed by ~BufferCacheEntry() when the
-    // entries are destroyed. Caller must hold mutex_; keeping the surface_
-    // reads and the ReleaseBuffer() calls atomic prevents a concurrent
-    // SetSurface() from releasing old-surface entries to the new surface.
+    // Drain the cache and release everything with INVALID_FENCE; any stored
+    // release fence is closed by its SyncFence when the entries are
+    // destroyed (the last sptr reference drops). Caller must hold mutex_;
+    // keeping the surface_ reads and the ReleaseBuffer() calls atomic
+    // prevents a concurrent SetSurface() from releasing old-surface entries
+    // to the new surface.
     void ReleaseAllLocked();
 
     mutable std::mutex mutex_;

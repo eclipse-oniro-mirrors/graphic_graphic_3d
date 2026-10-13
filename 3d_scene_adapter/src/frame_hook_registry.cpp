@@ -17,7 +17,7 @@
 
 #include <algorithm>
 
-#include <core/log.h>
+#include "core/log.h"
 
 namespace OHOS::Render3D {
 

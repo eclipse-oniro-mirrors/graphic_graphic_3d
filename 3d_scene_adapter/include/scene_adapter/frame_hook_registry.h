@@ -20,8 +20,7 @@
 #include <mutex>
 #include <vector>
 
-#include <render/intf_render_context.h>
-
+#include "render/intf_render_context.h"
 #include "scene_adapter/intf_frame_hook.h"
 
 namespace OHOS::Render3D {
@@ -53,8 +52,11 @@ public:
 private:
     FrameHookRegistry() = default;
     ~FrameHookRegistry() override = default;
+
     FrameHookRegistry(const FrameHookRegistry&) = delete;
     FrameHookRegistry& operator=(const FrameHookRegistry&) = delete;
+    FrameHookRegistry(const FrameHookRegistry&&) = delete;
+    FrameHookRegistry& operator=(const FrameHookRegistry&&) = delete;
 
     mutable std::mutex mutex_;
     std::vector<std::weak_ptr<IFrameHook>> hooks_;

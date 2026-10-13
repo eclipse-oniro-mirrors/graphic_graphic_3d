@@ -70,14 +70,13 @@
 
 #include "data_ability_helper.h"
 #include <sys/resource.h>
-#include <unistd.h>
 #include "napi_base_context.h"
 
 #include <render/implementation_uids.h>
 #include <render/gles/intf_device_gles.h>
 #include <render/intf_renderer.h>
 #include <render/intf_render_context.h>
-#include <render/util/intf_render_frame_util.h>
+#include "render/util/intf_render_frame_util.h"
 #include <render/util/intf_render_util.h>
 #include <render/vulkan/intf_device_vk.h>
 #include <render/maleoon/intf_device_mln.h>
@@ -887,15 +886,14 @@ void SceneAdapter::RenderFunction()
     FrameHookRegistry::Instance().PostRenderAll(*rc);
 
     if (receiveBuffer) {
-        int32_t fenceFileDesc = frameSignalScope_->TryExportFd(*rc);
-        if (sfBufferInfo_.fn_) {
-            sfBufferInfo_.fn_(fenceFileDesc);
+        // The exported fence owns its fd. The callback contract still takes
+        // a raw fd, so hand it a duplicate (the callback closes it); the
+        // local fence closes its own fd when the last reference drops.
+        OHOS::sptr<OHOS::SyncFence> releaseFence = frameSignalScope_->TryExportFd(*rc);
+        if (sfBufferInfo_.fn_ && releaseFence != nullptr && releaseFence->IsValid()) {
+            sfBufferInfo_.fn_(releaseFence->Dup());
         } else {
-            // The callback owns the exported fd; close it to avoid a per-frame fd leak.
-            WIDGET_LOGW("sfBufferInfo fn is null, close exported fd %d", fenceFileDesc);
-            if (fenceFileDesc >= 0) {
-                close(fenceFileDesc);
-            }
+            WIDGET_LOGW("sfBufferInfo fn is null or invalid fence, fence dropped (fd auto-closed)");
         }
         frameSignalScope_.reset();
     }

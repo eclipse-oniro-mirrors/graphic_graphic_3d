@@ -18,7 +18,7 @@
 
 #include <memory>
 
-#include <render/intf_render_context.h>
+#include "render/intf_render_context.h"
 
 namespace OHOS::Render3D {
 
@@ -30,13 +30,19 @@ namespace OHOS::Render3D {
 // SurfaceStream) so weak_from_this() stays valid.
 class IFrameHook : public std::enable_shared_from_this<IFrameHook> {
 public:
+    IFrameHook() = default;
     virtual ~IFrameHook() = default;
+
+    IFrameHook(const IFrameHook&) = delete;
+    IFrameHook& operator=(const IFrameHook&) = delete;
+    IFrameHook(const IFrameHook&&) = delete;
+    IFrameHook& operator=(const IFrameHook&&) = delete;
 
     // Before the GPU submit: register GPU signals (FrameSignalScope::Register(ctx)).
     virtual void PreRender(RENDER_NS::IRenderContext& ctx) = 0;
 
-    // After the GPU submit: export signal fds (FrameSignalScope::TryExportFd(ctx))
-    // and feed them to buffer owners (SurfaceBufferOwner::SetReleaseFenceFd()).
+    // After the GPU submit: export release fences (FrameSignalScope::TryExportFd(ctx))
+    // and feed them to buffer owners (SurfaceBufferOwner::SetReleaseFence()).
     virtual void PostRender(RENDER_NS::IRenderContext& ctx) = 0;
 };
 
@@ -46,7 +52,13 @@ public:
 // expires and is pruned by the render loop.
 class IFrameHookRegistry {
 public:
+    IFrameHookRegistry() = default;
     virtual ~IFrameHookRegistry() = default;
+
+    IFrameHookRegistry(const IFrameHookRegistry&) = delete;
+    IFrameHookRegistry& operator=(const IFrameHookRegistry&) = delete;
+    IFrameHookRegistry(const IFrameHookRegistry&&) = delete;
+    IFrameHookRegistry& operator=(const IFrameHookRegistry&&) = delete;
 
     // At most once per hook (matched by control block); duplicates are
     // rejected. Registering again after Unregister() is valid.

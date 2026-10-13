@@ -18,25 +18,25 @@
 
 #include <memory>
 
-#include <iconsumer_surface.h>
-#include <meta/ext/attachment/attachment.h>
-#include <meta/ext/implementation_macros.h>
-#include <meta/ext/object.h>
-#include <meta/ext/object_fwd.h>
-#include <meta/interface/interface_macros.h>
-#include <meta/interface/intf_named.h>
-#include <meta/interface/resource/intf_dynamic_resource.h>
-#include <render/device/intf_gpu_resource_manager.h>
-#include <scene/ext/intf_ecs_object.h>
-#include <scene/ext/intf_internal_scene.h>
-#include <scene/ext/intf_render_resource.h>
-#include <scene_adapter/frame_signal_handle_allocator.h>
-#include <scene_adapter/frame_signal_scope.h>
-#include <scene_adapter/intf_frame_hook.h>
-#include <scene_adapter/intf_surface_stream.h>
-#include <scene_adapter/surface_buffer_owner.h>
-#include <surface_buffer.h>
-#include <surface_utils.h>
+#include "iconsumer_surface.h"
+#include "meta/ext/attachment/attachment.h"
+#include "meta/ext/implementation_macros.h"
+#include "meta/ext/object.h"
+#include "meta/ext/object_fwd.h"
+#include "meta/interface/interface_macros.h"
+#include "meta/interface/intf_named.h"
+#include "meta/interface/resource/intf_dynamic_resource.h"
+#include "render/device/intf_gpu_resource_manager.h"
+#include "scene/ext/intf_ecs_object.h"
+#include "scene/ext/intf_internal_scene.h"
+#include "scene/ext/intf_render_resource.h"
+#include "scene_adapter/frame_signal_handle_allocator.h"
+#include "scene_adapter/frame_signal_scope.h"
+#include "scene_adapter/intf_frame_hook.h"
+#include "scene_adapter/intf_surface_stream.h"
+#include "scene_adapter/surface_buffer_owner.h"
+#include "surface_buffer.h"
+#include "surface_utils.h"
 
 namespace OHOS::Render3D {
 

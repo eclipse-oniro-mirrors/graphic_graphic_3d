@@ -15,12 +15,9 @@
 
 #include "scene_adapter/frame_signal_scope.h"
 
-#include <unistd.h>
-
-#include <render/device/intf_device.h>
-#include <render/util/intf_render_util.h>
-
-#include <core/log.h>
+#include "core/log.h"
+#include "render/device/intf_device.h"
+#include "render/util/intf_render_util.h"
 
 namespace OHOS::Render3D {
 
@@ -51,7 +48,7 @@ void FrameSignalScope::Register(RENDER_NS::IRenderContext& ctx)
     renderFrameUtil.AddGpuSignal(signalData);
 }
 
-int32_t FrameSignalScope::TryExportFd(RENDER_NS::IRenderContext& ctx)
+OHOS::sptr<OHOS::SyncFence> FrameSignalScope::TryExportFd(RENDER_NS::IRenderContext& ctx)
 {
     using ExportResult = RENDER_NS::IRenderFrameUtil::ExportResult;
 
@@ -61,28 +58,31 @@ int32_t FrameSignalScope::TryExportFd(RENDER_NS::IRenderContext& ctx)
     const RENDER_NS::IRenderFrameUtil::NativeFence fence = renderFrameUtil.ExportFrameGpuSignal(handle_);
     switch (fence.result) {
         case ExportResult::EXPORTED:
-            return fence.nativeFenceFd;
+            // Wrap the fd right at the ownership boundary: SyncFence's
+            // UniqueFd takes over the close, so no caller ever closes it
+            // manually (the last sptr reference drop closes the fd).
+            return OHOS::sptr<OHOS::SyncFence>(new OHOS::SyncFence(fence.nativeFenceFd));
         case ExportResult::ALREADY_SIGNALED:
             // The signal already completed, there is nothing left to wait on.
-            return -1;
+            return OHOS::SyncFence::INVALID_FENCE;
         case ExportResult::NOT_SIGNALED:
             // Registered but never consumed (idle frame), or an unknown handle:
             // nothing to export.
-            CORE_LOG_E("%s not signaled this frame -> -1", __func__);
-            return -1;
+            CORE_LOG_E("%s not signaled this frame -> invalid fence", __func__);
+            return OHOS::SyncFence::INVALID_FENCE;
         case ExportResult::NOT_SUPPORTED:
         case ExportResult::FAILED:
             // Per the ExportFrameGpuSignal contract: with NOT_SUPPORTED or
             // FAILED synchronize on the CPU before releasing the buffer the
-            // signal guards. A plain -1 would let consumers reuse the buffer
-            // while the GPU may still be writing to it.
+            // signal guards. An invalid fence would let consumers reuse the
+            // buffer while the GPU may still be writing to it.
             CORE_LOG_E("%s export failed (%u), synchronize with WaitForIdle", __func__,
                 static_cast<uint32_t>(fence.result));
             ctx.GetDevice().WaitForIdle();
-            return -1;
+            return OHOS::SyncFence::INVALID_FENCE;
         default:
             CORE_LOG_E("%s unexpected export result (%u)", __func__, static_cast<uint32_t>(fence.result));
-            return -1;
+            return OHOS::SyncFence::INVALID_FENCE;
     }
 }
 

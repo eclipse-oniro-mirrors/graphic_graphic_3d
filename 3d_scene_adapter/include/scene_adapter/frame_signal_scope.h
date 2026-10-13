@@ -18,12 +18,12 @@
 
 #include <cstdint>
 
-#include <base/containers/shared_ptr.h>
-#include <refbase.h>
-#include <render/intf_render_context.h>
-#include <render/resource_handle.h>
-#include <render/util/intf_render_frame_util.h>
-#include <sync_fence.h>
+#include "base/containers/shared_ptr.h"
+#include "refbase.h"
+#include "render/intf_render_context.h"
+#include "render/resource_handle.h"
+#include "render/util/intf_render_frame_util.h"
+#include "sync_fence.h"
 
 namespace OHOS::Render3D {
 
@@ -72,6 +72,8 @@ public:
 
     FrameSignalScope(const FrameSignalScope&) = delete;
     FrameSignalScope& operator=(const FrameSignalScope&) = delete;
+    FrameSignalScope(const FrameSignalScope&&) = delete;
+    FrameSignalScope& operator=(const FrameSignalScope&&) = delete;
 
     // Pre-submit: registers a GPU_SEMAPHORE (Vulkan) or GPU_FENCE (GLES)
     // signal via AddGpuSignal. Must be called before RenderDeferredFrame.
@@ -79,16 +81,19 @@ public:
     void Register(RENDER_NS::IRenderContext& ctx);
 
     // Post-submit: exports the signaled signal data as a sync fd via
-    // IRenderFrameUtil::ExportFrameGpuSignal.
-    // Returns -1 if the signal was not consumed (idle frame), already
-    // signaled, or export failed; on an unsupported or failed export it
-    // synchronizes with IDevice::WaitForIdle() before returning -1, so the
-    // buffer the signal guards is safe to release either way.
+    // IRenderFrameUtil::ExportFrameGpuSignal and wraps it in a SyncFence.
+    // The fence owns the fd (UniqueFd closes it when the SyncFence dies), so
+    // callers must not close() it; use IsValid() (not null checks) to detect
+    // the invalid fence, INVALID_FENCE is a non-null sptr holding fd -1.
+    // Returns SyncFence::INVALID_FENCE if the signal was not consumed (idle
+    // frame), already signaled, or export failed; on an unsupported or failed
+    // export it synchronizes with IDevice::WaitForIdle() before returning,
+    // so the buffer the signal guards is safe to release either way.
     // @param ctx Render context of the frame that was submitted.
-    int32_t TryExportFd(RENDER_NS::IRenderContext& ctx);
+    OHOS::sptr<OHOS::SyncFence> TryExportFd(RENDER_NS::IRenderContext& ctx);
 
-    // Signal handle; lets the caller pair the exported fd with the matching
-    // buffer entry via SurfaceBufferOwner::SetReleaseFenceFd().
+    // Signal handle; lets the caller pair the exported fence with the matching
+    // buffer entry via SurfaceBufferOwner::SetReleaseFence().
     const RENDER_NS::RenderHandleReference& GetHandle() const { return handle_; }
 
 private:
