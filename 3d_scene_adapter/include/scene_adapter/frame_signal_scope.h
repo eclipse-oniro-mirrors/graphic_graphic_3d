@@ -52,8 +52,8 @@ enum class AcquireFenceWaitResult : uint32_t {
 AcquireFenceWaitResult WaitAcquireFence(const BASE_NS::shared_ptr<RENDER_NS::IRenderContext>& ctx,
     const OHOS::sptr<OHOS::SyncFence>& acquireFence, uint32_t timeoutMs = ACQUIRE_FENCE_WAIT_TIMEOUT_MS);
 
-// Two-phase GPU signal sequence that produces a release fence fd:
-//   Register(ctx) -> RenderDeferredFrame() -> TryExportFd(ctx)
+// Two-phase GPU signal sequence that produces a release fence (SyncFence):
+//   Register(ctx) -> RenderDeferredFrame() -> TryExportFence(ctx)
 // Two-phase because a Vulkan sync fd can only be exported from a semaphore
 // with a pending signal (i.e. after submit).
 // The render context is passed per phase instead of being stored: a scope
@@ -65,7 +65,7 @@ AcquireFenceWaitResult WaitAcquireFence(const BASE_NS::shared_ptr<RENDER_NS::IRe
 class FrameSignalScope {
 public:
     // @param handle Signal handle; its id must be unique among all scopes
-    // coexisting in one frame, or TryExportFd() may export another owner's
+    // coexisting in one frame, or TryExportFence() may export another owner's
     // semaphore.
     explicit FrameSignalScope(RENDER_NS::RenderHandleReference handle);
     ~FrameSignalScope();
@@ -90,14 +90,14 @@ public:
     // export it synchronizes with IDevice::WaitForIdle() before returning,
     // so the buffer the signal guards is safe to release either way.
     // @param ctx Render context of the frame that was submitted.
-    OHOS::sptr<OHOS::SyncFence> TryExportFd(RENDER_NS::IRenderContext& ctx);
+    OHOS::sptr<OHOS::SyncFence> TryExportFence(RENDER_NS::IRenderContext& ctx);
 
     // Signal handle; lets the caller pair the exported fence with the matching
     // buffer entry via SurfaceBufferOwner::SetReleaseFence().
     const RENDER_NS::RenderHandleReference& GetHandle() const { return handle_; }
 
 private:
-    // Signal handle; ExportFrameGpuSignal() in TryExportFd() looks up the
+    // Signal handle; ExportFrameGpuSignal() in TryExportFence() looks up the
     // frame's signal data by its id.
     RENDER_NS::RenderHandleReference handle_;
 };

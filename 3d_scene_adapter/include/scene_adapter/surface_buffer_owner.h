@@ -18,7 +18,6 @@
 
 #include <cstdint>
 #include <list>
-#include <mutex>
 
 #include "base/containers/shared_ptr.h"
 #include "iconsumer_surface.h"
@@ -89,7 +88,6 @@ private:
 };
 
 // Owns the buffer lifecycle (acquire, cache, release) for one consumer
-// surface under a single mutex.
 // The cache holds at most two entries: on arrival, Cache() releases all
 // but the last entry, then tail-inserts the new one. This ensures the GPU
 // is done sampling an old buffer before the producer overwrites it.
@@ -137,18 +135,13 @@ public:
 
 private:
     // Release one entry with its release fence (or INVALID_FENCE).
-    // Caller must hold mutex_.
     void ReleaseEntryLocked(BASE_NS::shared_ptr<BufferCacheEntry> entry);
 
     // Drain the cache and release everything with INVALID_FENCE; any stored
     // release fence is closed by its SyncFence when the entries are
-    // destroyed (the last sptr reference drops). Caller must hold mutex_;
-    // keeping the surface_ reads and the ReleaseBuffer() calls atomic
-    // prevents a concurrent SetSurface() from releasing old-surface entries
-    // to the new surface.
+    // destroyed (the last sptr reference drops).
     void ReleaseAllLocked();
 
-    mutable std::mutex mutex_;
     OHOS::sptr<OHOS::IConsumerSurface> surface_ = nullptr;
     // Cached entries; holds at most two at any time. See the class comment.
     std::list<BASE_NS::shared_ptr<BufferCacheEntry>> cache_;

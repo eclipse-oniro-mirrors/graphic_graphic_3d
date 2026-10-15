@@ -17,7 +17,6 @@
 #define OHOS_RENDER_3D_FRAME_HOOK_REGISTRY_H
 
 #include <memory>
-#include <mutex>
 #include <vector>
 
 #include "render/intf_render_context.h"
@@ -29,12 +28,6 @@ namespace OHOS::Render3D {
 // render context per process). Hooks are stored as std::weak_ptr
 // observations: a hook destroyed without Unregister() expires and is
 // pruned by the render loop instead of dangling.
-// Hooks are invoked while holding the mutex. This is safe because every
-// destruction path Unregisters() first (parks on the mutex until the
-// render pass finishes); a std strong reference could NOT keep a hook
-// alive since META owns the lifetime (no-op deleter bridge in
-// SurfaceStream). Hence hooks must not re-enter the registry from
-// PreRender()/PostRender() (non-recursive mutex => deadlock).
 class FrameHookRegistry : public IFrameHookRegistry {
 public:
     static FrameHookRegistry& Instance()
@@ -58,7 +51,6 @@ private:
     FrameHookRegistry(const FrameHookRegistry&&) = delete;
     FrameHookRegistry& operator=(const FrameHookRegistry&&) = delete;
 
-    mutable std::mutex mutex_;
     std::vector<std::weak_ptr<IFrameHook>> hooks_;
 };
 

@@ -41,7 +41,7 @@ public:
     // Before the GPU submit: register GPU signals (FrameSignalScope::Register(ctx)).
     virtual void PreRender(RENDER_NS::IRenderContext& ctx) = 0;
 
-    // After the GPU submit: export release fences (FrameSignalScope::TryExportFd(ctx))
+    // After the GPU submit: export release fences (FrameSignalScope::TryExportFence(ctx))
     // and feed them to buffer owners (SurfaceBufferOwner::SetReleaseFence()).
     virtual void PostRender(RENDER_NS::IRenderContext& ctx) = 0;
 };

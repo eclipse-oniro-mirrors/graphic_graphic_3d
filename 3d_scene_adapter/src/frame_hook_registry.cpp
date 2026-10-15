@@ -28,7 +28,6 @@ void FrameHookRegistry::Register(const std::weak_ptr<IFrameHook>& hook)
         CORE_LOG_E("%s hook is nullptr or expired", __func__);
         return;
     }
-    std::lock_guard<std::mutex> lock(mutex_);
     // A hook must be registered at most once; a duplicate would make the
     // render loop invoke its PreRender()/PostRender() twice per frame.
     // Match by control block (owner_before), consistent with Unregister(),
@@ -45,7 +44,6 @@ void FrameHookRegistry::Register(const std::weak_ptr<IFrameHook>& hook)
 
 void FrameHookRegistry::Unregister(const std::weak_ptr<IFrameHook>& hook)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
     // Match by control block (owner_before) so an already-expired hook can
     // still be removed; safe to call multiple times.
     hooks_.erase(std::remove_if(hooks_.begin(), hooks_.end(),
@@ -56,10 +54,6 @@ void FrameHookRegistry::Unregister(const std::weak_ptr<IFrameHook>& hook)
 
 void FrameHookRegistry::PreRenderAll(RENDER_NS::IRenderContext& ctx)
 {
-    // Invoke while holding the mutex: hook destruction Unregisters() first
-    // and parks on this mutex, so hooks cannot be freed mid-call (see class
-    // comment for why the std strong reference alone is not enough).
-    std::lock_guard<std::mutex> lock(mutex_);
     for (auto it = hooks_.begin(); it != hooks_.end();) {
         if (auto hook = it->lock()) {
             hook->PreRender(ctx);
@@ -73,8 +67,6 @@ void FrameHookRegistry::PreRenderAll(RENDER_NS::IRenderContext& ctx)
 
 void FrameHookRegistry::PostRenderAll(RENDER_NS::IRenderContext& ctx)
 {
-    // Same contract as PreRenderAll().
-    std::lock_guard<std::mutex> lock(mutex_);
     for (auto it = hooks_.begin(); it != hooks_.end();) {
         if (auto hook = it->lock()) {
             hook->PostRender(ctx);

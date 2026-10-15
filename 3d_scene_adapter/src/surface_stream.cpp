@@ -120,7 +120,7 @@ bool SurfaceStream::Build(const META_NS::IMetadata::Ptr& metadata)
         CORE_LOG_E("get render queue failed");
         return false;
     }
-    std::lock_guard<std::mutex> lock(renderContextMutex_);
+
     renderContext_ = context->GetRenderer();
     if (renderContext_) {
         backendType_ = renderContext_->GetDevice().GetBackendType();
@@ -130,34 +130,30 @@ bool SurfaceStream::Build(const META_NS::IMetadata::Ptr& metadata)
 
 bool SurfaceStream::AttachTo(const META_NS::IAttach::Ptr& target, const META_NS::IObject::Ptr& dataContext)
 {
-    {
-        std::lock_guard<std::mutex> lock(renderResourceMutex_);
-        if (auto existing = renderResource_.lock()) {
-            CORE_LOG_E("render resource already attached.");
-            return false;
-        }
+    if (auto existing = renderResource_.lock()) {
+        CORE_LOG_E("render resource already attached.");
+        return false;
+    }
 
-        if (target == nullptr) {
-            CORE_LOG_E("target is null");
-            return false;
-        }
+    if (target == nullptr) {
+        CORE_LOG_E("target is null");
+        return false;
+    }
 
-        auto bitmap = interface_cast<SCENE_NS::IBitmap>(target);
-        if (bitmap == nullptr) {
-            CORE_LOG_E("Incorrect type bitmap is null");
-            return false;
-        }
-        renderResource_ = interface_pointer_cast<SCENE_NS::IRenderResource>(target);
-        if (auto attached = renderResource_.lock(); !attached) {
-            CORE_LOG_E("render resource attach failed");
-            return false;
-        }
+    auto bitmap = interface_cast<SCENE_NS::IBitmap>(target);
+    if (bitmap == nullptr) {
+        CORE_LOG_E("Incorrect type bitmap is null");
+        return false;
+    }
+    renderResource_ = interface_pointer_cast<SCENE_NS::IRenderResource>(target);
+    if (auto attached = renderResource_.lock(); !attached) {
+        CORE_LOG_E("render resource attach failed");
+        return false;
     }
 
     if (!Init()) {
         CORE_LOG_E("surface stream Init failed");
         // Roll back the render resource binding on init failure to keep state consistent.
-        std::lock_guard<std::mutex> lock(renderResourceMutex_);
         renderResource_ = nullptr;
         return false;
     }
@@ -171,14 +167,11 @@ bool SurfaceStream::DetachFrom(const META_NS::IAttach::Ptr& target)
         CORE_LOG_E("detach target is null");
         return false;
     }
-    {
-        std::lock_guard<std::mutex> lock(renderResourceMutex_);
-        if (interface_pointer_cast<IAttach>(renderResource_) != interface_pointer_cast<IAttach>(target)) {
-            CORE_LOG_E("Invalid input parameter, incorrect type");
-            return false;
-        }
-        renderResource_ = nullptr;
+    if (interface_pointer_cast<IAttach>(renderResource_) != interface_pointer_cast<IAttach>(target)) {
+        CORE_LOG_E("Invalid input parameter, incorrect type");
+        return false;
     }
+    renderResource_ = nullptr;
 
     Deinit();
     return true;
@@ -224,8 +217,7 @@ bool SurfaceStream::Init()
 
 void SurfaceStream::Deinit()
 {
-    // Unregister first (parks on the registry mutex until any render pass
-    // finishes), then tear down.
+    // Unregister first, then tear down.
     FrameHookRegistry::Instance().Unregister(weak_from_this());
 
     if (bufferOwner_) {
@@ -274,22 +266,15 @@ void SurfaceStream::ProcessBufferAvailable()
     }
 
     // Wait on the acquire fence (GPU-side preferred, CPU fallback).
-    {
-        BASE_NS::shared_ptr<RENDER_NS::IRenderContext> localCtx;
-        {
-            std::lock_guard<std::mutex> lock(renderContextMutex_);
-            localCtx = renderContext_;
-        }
-        auto waitResult = WaitAcquireFence(localCtx, acquireFence);
-        // Drop the SyncFence: WaitAcquireFence fully manages the fence fd
-        // (dups and closes it internally), so dropping it only closes the
-        // original fd.
-        acquireFence = OHOS::SyncFence::INVALID_FENCE;
-        if (waitResult != AcquireFenceWaitResult::GPU_WAITED && waitResult != AcquireFenceWaitResult::CPU_WAITED) {
-            CORE_LOG_E("wait acquire fence failed, release buffer");
-            bufferOwner_->ReleaseImmediate(acquireSurfaceBuffer);
-            return;
-        }
+    auto waitResult = WaitAcquireFence(renderContext_, acquireFence);
+    // Drop the SyncFence: WaitAcquireFence fully manages the fence fd
+    // (dups and closes it internally), so dropping it only closes the
+    // original fd.
+    acquireFence = OHOS::SyncFence::INVALID_FENCE;
+    if (waitResult != AcquireFenceWaitResult::GPU_WAITED && waitResult != AcquireFenceWaitResult::CPU_WAITED) {
+        CORE_LOG_E("wait acquire fence failed, release buffer");
+        bufferOwner_->ReleaseImmediate(acquireSurfaceBuffer);
+        return;
     }
 
     OH_NativeBuffer* nativeBuffer = acquireSurfaceBuffer->SurfaceBufferToNativeBuffer();
@@ -344,7 +329,7 @@ void SurfaceStream::PostRender(RENDER_NS::IRenderContext& ctx)
     // the cache entry bound to this handle; consumed when the entry is
     // released. An idle frame yields an invalid fence and keeps any
     // previously stored fence.
-    OHOS::sptr<OHOS::SyncFence> releaseFence = frameSignalScope_->TryExportFd(ctx);
+    OHOS::sptr<OHOS::SyncFence> releaseFence = frameSignalScope_->TryExportFence(ctx);
     if (bufferOwner_) {
         bufferOwner_->SetReleaseFence(frameSignalScope_->GetHandle(), releaseFence);
     } else {
@@ -364,18 +349,9 @@ void SurfaceStream::UpdateView(
         return;
     }
 
-    BASE_NS::shared_ptr<RENDER_NS::IRenderContext> localRenderContext = nullptr;
-    RENDER_NS::DeviceBackendType localBackendType = RENDER_NS::DeviceBackendType::VULKAN;
-    {
-        // backendType_ is written under renderContextMutex_ in Build(),
-        // so it must be read under the same lock to avoid a data race.
-        std::lock_guard<std::mutex> lock(renderContextMutex_);
-        if (renderContext_ == nullptr) {
-            CORE_LOG_E("invalid render context");
-            return;
-        }
-        localRenderContext = renderContext_;
-        localBackendType = backendType_;
+    if (renderContext_ == nullptr) {
+        CORE_LOG_E("invalid render context");
+        return;
     }
 
     auto colorSpace = ConvertColorGamutToColorSpace(colorGamut);
@@ -383,7 +359,7 @@ void SurfaceStream::UpdateView(
     if (colorSpaceResult != 0) {
         CORE_LOG_E("OH_NativeBuffer_SetColorSpace failed: %d", colorSpaceResult);
     }
-    auto& device = localRenderContext->GetDevice();
+    auto& device = renderContext_->GetDevice();
     auto& grm = device.GetGpuResourceManager();
     RENDER_NS::GpuImageDesc imageDesc{};
     imageDesc.usageFlags = RENDER_NS::ImageUsageFlagBits::CORE_IMAGE_USAGE_SAMPLED_BIT;
@@ -394,18 +370,18 @@ void SurfaceStream::UpdateView(
     frameId += BASE_NS::to_string(surfaceId_.load(std::memory_order_relaxed)) + "_" +
         BASE_NS::to_string(frameIndex_.fetch_add(1, std::memory_order_relaxed));
 
-    if (localBackendType == RENDER_NS::DeviceBackendType::VULKAN) {
+    if (backendType_ == RENDER_NS::DeviceBackendType::VULKAN) {
         RENDER_NS::ImageDescVk vkImageDesc{};
         vkImageDesc.platformHwBuffer = reinterpret_cast<uintptr_t>(buffer);
         vkImageDesc.isFormatEffectivelySet = true;
         handle = grm.CreateView(frameId, imageDesc, vkImageDesc);
-    } else if (localBackendType == RENDER_NS::DeviceBackendType::OPENGLES) {
+    } else if (backendType_ == RENDER_NS::DeviceBackendType::OPENGLES) {
         RENDER_NS::ImageDescGLES glImageDesc{};
         glImageDesc.type = GL_TEXTURE_EXTERNAL_OES;
         glImageDesc.platformHwBuffer = reinterpret_cast<uintptr_t>(buffer);
         handle = grm.CreateView(frameId, imageDesc, glImageDesc);
     } else {
-        CORE_LOG_E("unsupported backend type: %d", static_cast<int>(localBackendType));
+        CORE_LOG_E("unsupported backend type: %d", static_cast<int>(backendType_));
         return;
     }
 
@@ -414,7 +390,6 @@ void SurfaceStream::UpdateView(
 
 void SurfaceStream::UpdateRenderResourceHandle(const RENDER_NS::RenderHandleReference& handle)
 {
-    std::lock_guard<std::mutex> lock(renderResourceMutex_);
     auto bitmap = renderResource_.lock();
     if (bitmap == nullptr) {
         CORE_LOG_E("bitmap is nullptr");
@@ -430,15 +405,8 @@ SurfaceStream::~SurfaceStream()
     // Deinit() unregisters the hook/listener and releases all cached buffers.
     Deinit();
 
-    {
-        std::lock_guard<std::mutex> lock(renderResourceMutex_);
-        renderResource_ = nullptr;
-    }
-    {
-        std::lock_guard<std::mutex> lock(renderContextMutex_);
-        renderContext_ = nullptr;
-    }
-
+    renderResource_ = nullptr;
+    renderContext_ = nullptr;
     engineQueue_ = nullptr;
 }
 

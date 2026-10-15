@@ -25,7 +25,7 @@ namespace OHOS::Render3D {
 // Allocates unique signal handle ids for FrameSignalScope instances.
 // Process-wide singleton: one monotonic counter backs all signal handles,
 // so ids never collide in the per-frame GetFrameGpuSignalData() list (a
-// collision would export the wrong owner's semaphore in TryExportFd()).
+// collision would export the wrong owner's semaphore in TryExportFence()).
 // The high byte (0xBB) marks the ids as synthetic, outside the range of
 // real GPU resources.
 class FrameSignalHandleAllocator {

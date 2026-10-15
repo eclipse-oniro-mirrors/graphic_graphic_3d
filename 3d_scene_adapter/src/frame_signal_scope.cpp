@@ -48,7 +48,7 @@ void FrameSignalScope::Register(RENDER_NS::IRenderContext& ctx)
     renderFrameUtil.AddGpuSignal(signalData);
 }
 
-OHOS::sptr<OHOS::SyncFence> FrameSignalScope::TryExportFd(RENDER_NS::IRenderContext& ctx)
+OHOS::sptr<OHOS::SyncFence> FrameSignalScope::TryExportFence(RENDER_NS::IRenderContext& ctx)
 {
     using ExportResult = RENDER_NS::IRenderFrameUtil::ExportResult;
 

@@ -100,10 +100,8 @@ private:
 
 private:
     RENDER_NS::DeviceBackendType backendType_ = RENDER_NS::DeviceBackendType::VULKAN;
-    std::mutex renderContextMutex_;
     BASE_NS::shared_ptr<RENDER_NS::IRenderContext> renderContext_ = nullptr;
     META_NS::ITaskQueue::Ptr engineQueue_ = nullptr;
-    std::mutex renderResourceMutex_;
     SCENE_NS::IRenderResource::WeakPtr renderResource_ = nullptr;
     std::atomic<uint64_t> surfaceId_ = 0;
     std::atomic<uint32_t> width_ = 0;
@@ -122,7 +120,7 @@ private:
     //   runs before any member is destroyed, so the holder is alive there.
     // - Members are destroyed in reverse declaration order; this holder is
     //   declared last on purpose so it is destroyed FIRST, ahead of the
-    //   mutexes and owners above. Once it is gone weak_from_this() is
+    //   owners above. Once it is gone weak_from_this() is
     //   expired: no member destructor may call weak_from_this() or touch
     //   the FrameHookRegistry.
     std::shared_ptr<IFrameHook> selfHookHolder_ = nullptr;

@@ -889,7 +889,7 @@ void SceneAdapter::RenderFunction()
         // The exported fence owns its fd. The callback contract still takes
         // a raw fd, so hand it a duplicate (the callback closes it); the
         // local fence closes its own fd when the last reference drops.
-        OHOS::sptr<OHOS::SyncFence> releaseFence = frameSignalScope_->TryExportFd(*rc);
+        OHOS::sptr<OHOS::SyncFence> releaseFence = frameSignalScope_->TryExportFence(*rc);
         if (sfBufferInfo_.fn_ && releaseFence != nullptr && releaseFence->IsValid()) {
             sfBufferInfo_.fn_(releaseFence->Dup());
         } else {
