@@ -15,6 +15,8 @@
 
 #include "scene_adapter/scene_adapter.h"
 
+#include "scene_adapter/frame_hook_registry.h"
+
 #include <dlfcn.h>
 #include <memory>
 #include <string_view>
@@ -74,6 +76,7 @@
 #include <render/gles/intf_device_gles.h>
 #include <render/intf_renderer.h>
 #include <render/intf_render_context.h>
+#include "render/util/intf_render_frame_util.h"
 #include <render/util/intf_render_util.h>
 #include <render/vulkan/intf_device_vk.h>
 #include <render/maleoon/intf_device_mln.h>
@@ -192,7 +195,6 @@ static constexpr uint32_t FLOAT_TO_BYTE = sizeof(float) / sizeof(uint8_t);
 static constexpr uint32_t TRANSFORM_MATRIX_SIZE = 16;
 static const char* const RENDER_DATA_STORE_DEFAULT_STAGING = "RenderDataStoreDefaultStaging";
 static const char* const ENV_PROPERTIES_BUFFER_NAME = "AR_CAMERA_TRANSFORM_MATRIX";
-static constexpr uint64_t BUFFER_FENCE_HANDLE_BASE{0xAAAAAAAAaaaaaaaa};
 static constexpr uint32_t TIME_OUT_MILLISECONDS = 5000;
 
 template <typename T>
@@ -860,71 +862,41 @@ void SceneAdapter::RenderFunction()
     bool receiveBuffer = receiveBuffer_;
     receiveBuffer_ = false;
 
-    auto& renderFrameUtil = rc->GetRenderUtil().GetRenderFrameUtil();
-    auto backendType = rc->GetDevice().GetBackendType();
     if (receiveBuffer) {
         if (sfBufferInfo_.acquireFence_) {
-            int32_t ret = sfBufferInfo_.acquireFence_->Wait(TIME_OUT_MILLISECONDS);
-            if (sfBufferInfo_.acquireFence_->Get() >= 0 && ret < 0) {
-                WIDGET_LOGE("wait fence error: %d", ret);
+            auto waitResult = WaitAcquireFence(rc, sfBufferInfo_.acquireFence_, TIME_OUT_MILLISECONDS);
+            if (waitResult != AcquireFenceWaitResult::GPU_WAITED && waitResult != AcquireFenceWaitResult::CPU_WAITED) {
+                WIDGET_LOGE("wait fence error: %u", static_cast<uint32_t>(waitResult));
             }
             sfBufferInfo_.acquireFence_ = nullptr;
         }
-        if (backendType == RENDER_NS::DeviceBackendType::VULKAN) {
-            RENDER_NS::IRenderFrameUtil::SignalData signalData;
-            signalData.signaled = false;
-            signalData.signalResourceType = RENDER_NS::IRenderFrameUtil::SignalResourceType::GPU_SEMAPHORE;
-            signalData.handle = bufferFenceHandle_;
-            renderFrameUtil.AddGpuSignal(signalData);
-        } else if (backendType == RENDER_NS::DeviceBackendType::OPENGLES) {
-            RENDER_NS::IRenderFrameUtil::SignalData signalData;
-            signalData.signaled = false;
-            signalData.signalResourceType = RENDER_NS::IRenderFrameUtil::SignalResourceType::GPU_FENCE;
-            signalData.handle = bufferFenceHandle_;
-            renderFrameUtil.AddGpuSignal(signalData);
-        }
+        // Register the swapchain release-fence signal before the submit.
+        frameSignalScope_.emplace(bufferFenceHandle_);
+        frameSignalScope_->Register(*rc);
     }
+    // Hooks (e.g. SurfaceStream) register their GPU signals before the submit.
+    FrameHookRegistry::Instance().PreRenderAll(*rc);
     rc->GetRenderer().RenderDeferredFrame();
 
     for (auto& camera : disabledCameras) {
         camera->SetActive(true);
     }
 
-    if (receiveBuffer) {
-        auto addedSD = renderFrameUtil.GetFrameGpuSignalData();
-        for (const auto& ref : addedSD) {
-            if (ref.handle.GetHandle().id == bufferFenceHandle_.GetHandle().id) {
-                int32_t fenceFileDesc = CreateFenceFD(ref, rc->GetDevice());
-                sfBufferInfo_.fn_(fenceFileDesc);
-                break;
-            }
-        }
-    }
-}
+    // Hooks export their signal fds and feed them to their buffer owners.
+    FrameHookRegistry::Instance().PostRenderAll(*rc);
 
-int32_t SceneAdapter::CreateFenceFD(
-    const RENDER_NS::IRenderFrameUtil::SignalData& signalData, RENDER_NS::IDevice& device)
-{
-    int32_t fenceFileDesc = -1;
-    auto backendType = device.GetBackendType();
-    if (backendType == RENDER_NS::DeviceBackendType::VULKAN) {
-        // NOTE: vulkan not implemented yet
-        WIDGET_LOGD("vulkan fence");
-    } else if (backendType == RENDER_NS::DeviceBackendType::OPENGLES) {
-        const auto disp = static_cast<const RENDER_NS::DevicePlatformDataGLES&>(device.GetPlatformData()).display;
-        EGLSyncKHR sync = reinterpret_cast<EGLSyncKHR>(static_cast<uintptr_t>(signalData.gpuSignalResourceHandle));
-        if (sync == EGL_NO_SYNC_KHR) {
-            WIDGET_LOGE("invalid EGLSync from signal data");
-            return fenceFileDesc;
+    if (receiveBuffer) {
+        // The exported fence owns its fd. The callback contract still takes
+        // a raw fd, so hand it a duplicate (the callback closes it); the
+        // local fence closes its own fd when the last reference drops.
+        OHOS::sptr<OHOS::SyncFence> releaseFence = frameSignalScope_->TryExportFence(*rc);
+        if (sfBufferInfo_.fn_ && releaseFence != nullptr && releaseFence->IsValid()) {
+            sfBufferInfo_.fn_(releaseFence->Dup());
+        } else {
+            WIDGET_LOGW("sfBufferInfo fn is null or invalid fence, fence dropped (fd auto-closed)");
         }
-        fenceFileDesc = eglDupNativeFenceFDANDROID(disp, sync);
-        if (fenceFileDesc == -1) {
-            WIDGET_LOGE("eglDupNativeFence fail");
-        }
-    } else {
-        WIDGET_LOGE("no supported backend");
+        frameSignalScope_.reset();
     }
-    return fenceFileDesc;
 }
 
 void SceneAdapter::RenderFrame(bool needsSyncPaint)
@@ -1104,7 +1076,8 @@ void SceneAdapter::InitEnvironmentResource(const uint32_t bufferSize)
     auto renderContext = engineInstance_.renderContext_;
     RETURN_IF_NULL(renderContext);
 
-    bufferFenceHandle_ = RENDER_NS::RenderHandleReference{{static_cast<uint64_t>(key_) + BUFFER_FENCE_HANDLE_BASE}, {}};
+    // Unique handle from the process-wide allocator.
+    bufferFenceHandle_ = FrameSignalHandleAllocator::Instance().Alloc();
 
     auto envManager = CORE_NS::GetManager<CORE3D_NS::IEnvironmentComponentManager>(*ecs);
     RETURN_IF_NULL(envManager);

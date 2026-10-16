@@ -16,28 +16,33 @@
 #ifndef OHOS_RENDER_3D_SURFACE_STREAM_H
 #define OHOS_RENDER_3D_SURFACE_STREAM_H
 
-#include <queue>
+#include <memory>
 
-#include <iconsumer_surface.h>
-#include <meta/ext/attachment/attachment.h>
-#include <meta/ext/implementation_macros.h>
-#include <meta/ext/object.h>
-#include <meta/ext/object_fwd.h>
-#include <meta/interface/interface_macros.h>
-#include <meta/interface/intf_named.h>
-#include <meta/interface/resource/intf_dynamic_resource.h>
-#include <render/device/intf_gpu_resource_manager.h>
-#include <scene/ext/intf_ecs_object.h>
-#include <scene/ext/intf_internal_scene.h>
-#include <scene/ext/intf_render_resource.h>
-#include <scene_adapter/intf_surface_stream.h>
-#include <surface_buffer.h>
-#include <surface_utils.h>
+#include "iconsumer_surface.h"
+#include "meta/ext/attachment/attachment.h"
+#include "meta/ext/implementation_macros.h"
+#include "meta/ext/object.h"
+#include "meta/ext/object_fwd.h"
+#include "meta/interface/interface_macros.h"
+#include "meta/interface/intf_named.h"
+#include "meta/interface/resource/intf_dynamic_resource.h"
+#include "render/device/intf_gpu_resource_manager.h"
+#include "scene/ext/intf_ecs_object.h"
+#include "scene/ext/intf_internal_scene.h"
+#include "scene/ext/intf_render_resource.h"
+#include "scene_adapter/frame_signal_handle_allocator.h"
+#include "scene_adapter/frame_signal_scope.h"
+#include "scene_adapter/intf_frame_hook.h"
+#include "scene_adapter/intf_surface_stream.h"
+#include "scene_adapter/surface_buffer_owner.h"
+#include "surface_buffer.h"
+#include "surface_utils.h"
 
 namespace OHOS::Render3D {
 
 class SurfaceStream final : public META_NS::IntroduceInterfaces<META_NS::AttachmentFwd, ISurfaceStream>,
-                            public OHOS::IBufferConsumerListenerClazz {
+                            public OHOS::IBufferConsumerListenerClazz,
+                            public IFrameHook {
     META_OBJECT(SurfaceStream, ClassId::SurfaceStream, IntroduceInterfaces)
 
 public:
@@ -45,6 +50,10 @@ public:
 
     SurfaceStream() = default;
     ~SurfaceStream() override;
+
+    // IFrameHook: bridges the render loop (SceneAdapter) to the buffer owner.
+    void PreRender(RENDER_NS::IRenderContext& ctx) override;
+    void PostRender(RENDER_NS::IRenderContext& ctx) override;
 
 protected:
     void OnBufferAvailable() override;
@@ -91,21 +100,30 @@ private:
 
 private:
     RENDER_NS::DeviceBackendType backendType_ = RENDER_NS::DeviceBackendType::VULKAN;
-    std::mutex renderContextMutex_;
     BASE_NS::shared_ptr<RENDER_NS::IRenderContext> renderContext_ = nullptr;
     META_NS::ITaskQueue::Ptr engineQueue_ = nullptr;
-    std::mutex renderResourceMutex_;
     SCENE_NS::IRenderResource::WeakPtr renderResource_ = nullptr;
-    std::atomic<uint64_t> surfaceId_{0};
-    std::atomic<uint32_t> width_{0};
-    std::atomic<uint32_t> height_{0};
-    std::mutex consumerSurfaceMutex_;
-    OHOS::sptr<OHOS::IConsumerSurface> consumerSurface_ = nullptr;
+    std::atomic<uint64_t> surfaceId_ = 0;
+    std::atomic<uint32_t> width_ = 0;
+    std::atomic<uint32_t> height_ = 0;
+    // Owns the consumer surface and the full buffer lifecycle.
+    std::unique_ptr<SurfaceBufferOwner> bufferOwner_ = nullptr;
     OHOS::sptr<OHOS::Surface> producerSurface_ = nullptr;
-    std::atomic<uint64_t> frameIndex_{0};
-
-    std::mutex surfaceBufferCacheMutex_;
-    std::queue<OHOS::sptr<OHOS::SurfaceBuffer>> surfaceBufferCache_;
+    std::atomic<uint64_t> frameIndex_ = 0;
+    // Per-frame signal scope (constructed in PreRender, exported in PostRender).
+    std::optional<FrameSignalScope> frameSignalScope_ = std::nullopt;
+    // Keeps the std control block (no-op deleter) alive so weak_from_this()
+    // stays valid; destruction remains driven by META refcounting.
+    //
+    // Destruction-order contract (do not reorder the members below):
+    // - The ~SurfaceStream() body (Deinit() -> Unregister(weak_from_this()))
+    //   runs before any member is destroyed, so the holder is alive there.
+    // - Members are destroyed in reverse declaration order; this holder is
+    //   declared last on purpose so it is destroyed FIRST, ahead of the
+    //   owners above. Once it is gone weak_from_this() is
+    //   expired: no member destructor may call weak_from_this() or touch
+    //   the FrameHookRegistry.
+    std::shared_ptr<IFrameHook> selfHookHolder_ = nullptr;
 };
 
 } // namespace OHOS::Render3D
