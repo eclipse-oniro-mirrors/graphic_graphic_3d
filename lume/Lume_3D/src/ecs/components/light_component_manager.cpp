@@ -34,7 +34,7 @@ ENUM_TYPE_METADATA(LightComponent::Type, ENUM_VALUE(DIRECTIONAL, "Directional"),
     ENUM_VALUE(SPOT, "Spot"), ENUM_VALUE(RECT, "Rect"))
 
 DATA_TYPE_METADATA(LightComponent::RectLight, MEMBER_PROPERTY(width, "Width", 0), MEMBER_PROPERTY(height, "Height", 0),
-    MEMBER_PROPERTY(twoSided, "Two Sided", 0))
+    MEMBER_PROPERTY(twoSided, "Two-Sided", 0))
 
 CORE_END_NAMESPACE()
 
