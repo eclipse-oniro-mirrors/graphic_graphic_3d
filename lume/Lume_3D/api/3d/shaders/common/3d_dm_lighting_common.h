@@ -467,8 +467,7 @@ vec3 CalculateLighting(ShadingData sd, const uint materialFlags)
             const float attenuation = max(min(1.0 - pow(dist / range, 4.0), 1.0), 0.0);
             // NOTE: could check for NoL > 0.0 and NoV > 0.0
             color += CalculateRectAreaLight(
-                         currLightIdx, materialDiffuseBRDF, sd.f0.xyz, sd.N, sd.V, sd.pos.xyz, sd.alpha2) *
-                     attenuation;
+                currLightIdx, materialDiffuseBRDF, sd.f0.xyz, sd.N, sd.V, sd.pos.xyz, sd.alpha2) * attenuation;
         }
     }
 
@@ -608,8 +607,7 @@ vec3 CalculateLighting(
             const float attenuation = max(min(1.0 - pow(dist / range, 4.0), 1.0), 0.0);
             // NOTE: could check for NoL > 0.0 and NoV > 0.0
             color += CalculateRectAreaLight(
-                         currLightIdx, materialDiffuseBRDF, sd.f0.xyz, sd.N, sd.V, sd.pos.xyz, sd.alpha2) *
-                     attenuation;
+                currLightIdx, materialDiffuseBRDF, sd.f0.xyz, sd.N, sd.V, sd.pos.xyz, sd.alpha2) * attenuation;
         }
     }
     return color;
@@ -801,8 +799,7 @@ vec3 CalculateLighting(ShadingData sd, AnisotropicShadingVariables asv, Clearcoa
             const float attenuation = max(min(1.0 - pow(dist / range, 4.0), 1.0), 0.0);
             // NOTE: could check for NoL > 0.0 and NoV > 0.0
             color += CalculateRectAreaLight(
-                         currLightIdx, materialDiffuseBRDF, sd.f0.xyz, sd.N, sd.V, sd.pos.xyz, sd.alpha2) *
-                     attenuation;
+                currLightIdx, materialDiffuseBRDF, sd.f0.xyz, sd.N, sd.V, sd.pos.xyz, sd.alpha2) * attenuation;
         }
     }
 
@@ -1220,8 +1217,7 @@ vec3 CalculateLightingInplace(ShadingDataInplace sd, ClearcoatShadingVariables c
                 const float attenuation = max(min(1.0 - pow(dist / range, 4.0), 1.0), 0.0);
                 // NOTE: could check for NoL > 0.0 and NoV > 0.0
                 color += CalculateRectAreaLight(
-                             lightIdx, materialDiffuseBRDF, sd.f0.xyz, sd.N, sd.V, sd.pos.xyz, sd.alpha2) *
-                         attenuation;
+                    lightIdx, materialDiffuseBRDF, sd.f0.xyz, sd.N, sd.V, sd.pos.xyz, sd.alpha2) * attenuation;
             }
         }
     }
