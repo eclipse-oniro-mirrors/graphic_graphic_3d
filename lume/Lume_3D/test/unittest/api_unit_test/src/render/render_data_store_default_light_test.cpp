@@ -168,7 +168,7 @@ UNIT_TEST(API_RenderDataStoreDefaultLight, AddRectLightTest, testing::ext::TestS
     {
         auto lights = dataStoreDefaultLight->GetLights();
         ASSERT_EQ(1u, lights.size());
-        EXPECT_EQ(RenderLight::LIGHT_USAGE_RECT_LIGHT_BIT, light[0].lightUsageFlags);
+        EXPECT_EQ(RenderLight::LIGHT_USAGE_RECT_LIGHT_BIT, lights[0].lightUsageFlags);
     }
     {
         auto counts = dataStoreDefaultLight->GetLightCounts();
@@ -226,7 +226,7 @@ UNIT_TEST(API_RenderDataStoreDefaultLight, MixedLightsMaxCountTest, testing::ext
         EXPECT_EQ(DefaultMaterialLightingConstants::MAX_LIGHT_COUNT, lights.size());
     }
     {
-        auto lights = dataStoreDefaultLight->GetLightCounts();
+        auto counts = dataStoreDefaultLight->GetLightCounts();
         const uint32_t total = counts.directional + counts.spot + counts.point + counts.rect;
         EXPECT_EQ(DefaultMaterialLightingConstants::MAX_LIGHT_COUNT, total);
         EXPECT_EQ(30u, counts.point);

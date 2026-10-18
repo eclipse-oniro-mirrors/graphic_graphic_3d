@@ -411,7 +411,7 @@ napi_value PointLightJS::GetRange(NapiApi::FunctionContext<>& ctx)
     if (!validateSceneRef("GetRange")) {
         return ctx.GetUndefined();
     }
-    float range = 0.0f;
+    float range = 0.0;
     if (auto light = interface_cast<SCENE_NS::ILight>(GetNativeObject())) {
         range = META_NS::GetValue(light->Range());
     }

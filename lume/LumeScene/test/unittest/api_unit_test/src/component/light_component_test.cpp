@@ -164,7 +164,7 @@ UNIT_TEST_F(API_ScenePluginLightComponentTest, PointLightRange_SetValue, testing
  * @tc.desc: Verify RectLight RectWidth property read/write with normal value.
  * @tc.type: FUNC
  */
-UNIT_TEST_F(API_ScenePluginLightComponentTest, PointLight_Width_SetValue, testing::ext::TestSize.Level1)
+UNIT_TEST_F(API_ScenePluginLightComponentTest, RectLight_Width_SetValue, testing::ext::TestSize.Level1)
 {
     auto scene = CreateEmptyScene();
     auto node = scene->CreateNode("//test", ClassId::LightNode).GetResult();
@@ -178,7 +178,7 @@ UNIT_TEST_F(API_ScenePluginLightComponentTest, PointLight_Width_SetValue, testin
  * @tc.desc: Verify RectLight RectWidth property read/write with value zero.
  * @tc.type: FUNC
  */
-UNIT_TEST_F(API_ScenePluginLightComponentTest, PointLight_Width_SetZero, testing::ext::TestSize.Level1)
+UNIT_TEST_F(API_ScenePluginLightComponentTest, RectLight_Width_SetZero, testing::ext::TestSize.Level1)
 {
     auto scene = CreateEmptyScene();
     auto node = scene->CreateNode("//test", ClassId::LightNode).GetResult();
@@ -198,7 +198,7 @@ UNIT_TEST_F(API_ScenePluginLightComponentTest, RectLight_Height_SetValue, testin
     auto node = scene->CreateNode("//test", ClassId::LightNode).GetResult();
     SetComponent(node, "LightComponent");
 
-    TestEngineProperty<float>("RectWidth", 3.0f, nativeComponent.rectLight.height);
+    TestEngineProperty<float>("RectHeight", 3.0f, nativeComponent.rectLight.height);
 }
 
 /**
@@ -206,13 +206,13 @@ UNIT_TEST_F(API_ScenePluginLightComponentTest, RectLight_Height_SetValue, testin
  * @tc.desc: Verify RectLight RectHeight property read/write with value zero.
  * @tc.type: FUNC
  */
-UNIT_TEST_F(API_ScenePluginLightComponentTest, PointLight_Height_SetZero, testing::ext::TestSize.Level1)
+UNIT_TEST_F(API_ScenePluginLightComponentTest, RectLight_Height_SetZero, testing::ext::TestSize.Level1)
 {
     auto scene = CreateEmptyScene();
     auto node = scene->CreateNode("//test", ClassId::LightNode).GetResult();
     SetComponent(node, "LightComponent");
 
-    TestEngineProperty<float>("RectWidth", 0.0f, nativeComponent.rectLight.height);
+    TestEngineProperty<float>("RectHeight", 0.0f, nativeComponent.rectLight.height);
 }
 
 /**
