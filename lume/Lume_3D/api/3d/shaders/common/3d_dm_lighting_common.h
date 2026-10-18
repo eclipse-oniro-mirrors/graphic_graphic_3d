@@ -794,6 +794,7 @@ vec3 CalculateLighting(ShadingData sd, AnisotropicShadingVariables asv, Clearcoa
             const float dist = length(pointToLight);
             const vec3 L = pointToLight / dist;
             const float NoL = clamp(dot(sd.N, L), 0.0, 1.0);
+            // whole vec4: CalculateRectAreaLight reads .xyz, so both resolve to one load
             const vec4 lightDir = uLightData.lights[currLightIdx].dir;
             const float range = lightDir.w;
             // range window only: the solid angle in CalculateRectAreaLight already falls off with distance
@@ -924,6 +925,7 @@ vec3 CalculateLighting(ShadingData sd, SubsurfaceScatterShadingVariables sssv, c
                 }
             }
 
+            // one load each: the pair of scalars below come from the same vec4
             const vec4 spotParams = uLightData.lights[currLightIdx].spotLightParams;
             const vec4 lightDir = uLightData.lights[currLightIdx].dir;
             const float lightAngleScale = spotParams.x;
