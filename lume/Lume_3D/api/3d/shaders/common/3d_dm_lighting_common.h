@@ -95,6 +95,7 @@ struct SubsurfaceScatterShadingVariables {
 void GetFinalCorrectedRoughness(CORE_RELAXEDP in vec3 polygonNormal, CORE_RELAXEDP inout float roughness)
 {
 #if (CORE_GEOMETRIC_SPECULAR_AA_ROUGHNESS == 1)
+    // reduce shading aliasing by increasing roughness based on the curvature of the geometry
     const CORE_RELAXEDP vec3 normalDFdx = dFdx(polygonNormal);
     const CORE_RELAXEDP vec3 normalDdFdy = dFdy(polygonNormal);
     const CORE_RELAXEDP float geometricRoughness =
@@ -600,6 +601,7 @@ vec3 CalculateLighting(
             const float dist = length(pointToLight);
             const vec3 L = pointToLight / dist;
             const float NoL = clamp(dot(sd.N, L), 0.0, 1.0);
+            // whole vec4: CalculateRectAreaLight reads .xyz, so both resolve to one load
             const vec4 lightDir = uLightData.lights[currLightIdx].dir;
             const float range = lightDir.w;
             // range window only: the solid angle in CalculateRectAreaLight already falls off with distance

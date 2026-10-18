@@ -127,6 +127,7 @@ UNIT_TEST_F(API_ScenePluginLightComponentTest, Type_Point, testing::ext::TestSiz
     auto scene = CreateEmptyScene();
     auto node = scene->CreateNode("//test", ClassId::LightNode).GetResult();
     SetComponent(node, "LightComponent");
+
     TestEngineProperty<LightType>("Type", LightType::POINT, nativeComponent.type);
 }
 
@@ -140,6 +141,7 @@ UNIT_TEST_F(API_ScenePluginLightComponentTest, Type_Rect, testing::ext::TestSize
     auto scene = CreateEmptyScene();
     auto node = scene->CreateNode("//test", ClassId::LightNode).GetResult();
     SetComponent(node, "LightComponent");
+
     TestEngineProperty<LightType>("Type", LightType::RECT, nativeComponent.type);
 }
 

@@ -176,7 +176,6 @@ UNIT_TEST(API_RenderDataStoreDefaultLight, AddRectLightTest, testing::ext::TestS
         EXPECT_EQ(0u, counts.directional);
         EXPECT_EQ(0u, counts.spot);
         EXPECT_EQ(0u, counts.point);
-
     }
 
     dataStore.reset();
