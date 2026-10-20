@@ -18,6 +18,9 @@
 
 const float M_PI = 3.14159265358;
 
+// Epsilon for the roL grazing-angle guard in CalculateRectAreaLight.
+const float AREA_LIGHT_EPSILON = 0.001;
+
 // Adapted from https://alextardif.com/arealights.html
 
 float RectangleSolidAngle(vec3 p, vec3 v0, vec3 v1, vec3 v2, vec3 v3)
@@ -88,7 +91,7 @@ vec3 CalculateRectAreaLight(uint lightIdx, vec3 diff, vec3 spec, vec3 N, vec3 V,
 
     // Epsilon guards TracePlane against the grazing-angle 1/0 below.
     float roL = dot(normalize(rDir), normalize(lDir));
-    if (roL > 0.001) {
+    if (roL > AREA_LIGHT_EPSILON) {
         const vec3 intPos = P + rDir * TracePlane(P, rDir, lPos, lDir);
         const vec3 intVec = intPos - lPos;
         const vec2 intDist = vec2(dot(intVec, xDirHalf) / xLen, dot(intVec, yDirHalf) / yLen);
