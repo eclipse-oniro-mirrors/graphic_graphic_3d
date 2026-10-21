@@ -22,10 +22,14 @@
 #include <string>
 #include <napi_api.h>
 #include <core/intf_logger.h>
+#include "export.h"
+#include "scene_adapter/render_error_code.h"
 
 namespace NapiErrorUtil {
 enum Code : int32_t {
     OK = 0,
+
+    PARAM_CHECK_FAILED         = 401,
 
     SCENE_REF_LOST             = 10001,
     SCENE_NOT_INITIALIZED      = 10002,
@@ -55,11 +59,37 @@ enum Code : int32_t {
     INTERNAL_ERROR             = 70001,
 
     TRANSFER_FAILED            = 80001,
+
+    INVALID_ARRAY_ELEMENT      = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::INVALID_ARRAY_ELEMENT),
+    INVALID_PARAM              = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::INVALID_PARAM),
+    ENGINE_DESTROYED           = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::ENGINE_DESTROYED),
+    MEMORY_ALLOC_FAILED        = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::MEMORY_ALLOC_FAILED),
+    RESOURCE_DESTROYED         = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::RESOURCE_DESTROYED),
 };
 
-const char* ToString(Code code);
+SCENE_ADDON_PUBLIC const char* ToString(Code code);
 
-std::string FormatStringV(const char* fmt, va_list ap);
+SCENE_ADDON_PUBLIC std::string FormatStringV(const char* fmt, va_list ap);
+
+inline napi_value MakeErrorObject(napi_env env, Code code, const char* fmt, ...)
+{
+    std::string msg;
+    if (fmt) {
+        va_list ap;
+        va_start(ap, fmt);
+        msg = FormatStringV(fmt, ap);
+        va_end(ap);
+    } else {
+        msg = ToString(code);
+    }
+    napi_value resultCode;
+    napi_create_int32(env, static_cast<int32_t>(code), &resultCode);
+    napi_value resultMsg;
+    napi_create_string_utf8(env, msg.c_str(), msg.length(), &resultMsg);
+    napi_value error;
+    napi_create_error(env, resultCode, resultMsg, &error);
+    return error;
+}
 
 inline BASE_NS::string FormatErrorMessage(Code code, const BASE_NS::string& msg = {})
 {

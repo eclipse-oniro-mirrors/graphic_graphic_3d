@@ -71,13 +71,19 @@ class SceneComponentRecord extends Record<string, ComponentPropertyType> {
 
 @!namespace("Scene")
 
-from SceneResources use Shader, MaterialType, VariousMaterial, Animation, Environment, Image, ImageStream, MeshResource, Sampler, SceneResource, Effect;
+from SceneResources use Shader, MaterialType, VariousMaterial, Animation, Environment, Image, ImageStream, MeshResource, Sampler, SceneResource, Effect, RenderTarget;
 from SceneNodes use Camera, LightType, LightTypeUnion, Light, Node, NodeType, Geometry, NodeOrNull, VariousNodesOrNull, VariousNodes;
 from SceneTypes use RenderingPipelineType, GeometryDefinitionType, Vec2, Vec3, Vec4, ShadowAlgorithmType;
 
 struct SceneResourceParameters {
     name: String;
     uri: Optional<@sts_type("ResourceStr") Opaque>;
+}
+
+struct RenderTargetParameters {
+    name: String;
+    uri: Optional<@sts_type("ResourceStr") Opaque>;
+    size: Vec2;
 }
 
 struct SceneNodeParameters {
@@ -281,6 +287,8 @@ interface Scene {
     getSceneNative(): i64;
 
     @get getImpl(): Optional<i64>;
+
+    snapshot(cameras: Array<Camera>, params: Array<RenderTargetParameters>): Future<Array<RenderTarget>>;
 }
 
 union RenderContextOrNull {

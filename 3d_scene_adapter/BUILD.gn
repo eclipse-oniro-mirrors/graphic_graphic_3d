@@ -117,7 +117,8 @@ ohos_source_set("scene_adapter_source") {
     "src/camera_utils.cpp",
     "src/frame_signal_scope.cpp",
     "src/surface_buffer_owner.cpp",
-    "src/frame_hook_registry.cpp"
+    "src/frame_hook_registry.cpp",
+    "src/render_error_code.cpp"
   ]
 
   include_dirs = [
@@ -161,6 +162,7 @@ ohos_source_set("scene_adapter_source") {
     "opengles:libGLES",
     "window_manager:libwmutil",
     "ability_base:configuration",
+    "image_framework:image_native",
     "node:node_header_notice"
   ]
   defines += [ "LIB_ENGINE_CORE=${LIB_ENGINE_CORE}.z" ]
