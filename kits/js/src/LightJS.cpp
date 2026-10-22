@@ -408,7 +408,7 @@ void PointLightJS::Init(napi_env env, napi_value exports)
 
 napi_value PointLightJS::GetRange(NapiApi::FunctionContext<>& ctx)
 {
-    if (!validateSceneRef("GetRange")) {
+    if (!validateSceneRef()) {
         return ctx.GetUndefined();
     }
     float range = 0.0;
@@ -420,7 +420,7 @@ napi_value PointLightJS::GetRange(NapiApi::FunctionContext<>& ctx)
 
 void PointLightJS::SetRange(NapiApi::FunctionContext<float>& ctx)
 {
-    if (!validateSceneRef("SetRange")) {
+    if (!validateSceneRef()) {
         return;
     }
     float range = ctx.Arg<0>();
