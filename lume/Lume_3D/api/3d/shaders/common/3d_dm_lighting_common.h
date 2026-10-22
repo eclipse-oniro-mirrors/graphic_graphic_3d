@@ -907,7 +907,7 @@ vec3 CalculateLighting(ShadingData sd, SubsurfaceScatterShadingVariables sssv, c
                             uSampColorShadow, shadowCoord, NoL, shadowFactors, atlasSizeInvSize, lightFlags.zw);
                     } else if ((CORE_LIGHTING_FLAGS & CORE_LIGHTING_SHADOW_TYPE_VARIABLE_PCF_BIT) ==
                                CORE_LIGHTING_SHADOW_TYPE_VARIABLE_PCF_BIT) {
-                        shadowCoeff = CalcVariablePcfShadow(uSampDepthShadow,
+                        shadowCoeff = CalcVariablePcfShadow(uSampColorShadow,
                             shadowCoord,
                             NoL,
                             shadowFactors,
