@@ -34,6 +34,9 @@ LightETS::LightETS(
         case LightETS::LightType::POINT:
             sceneLightType = SCENE_NS::LightType::POINT;
             break;
+        case LightETS::LightType::RECT:
+            sceneLightType = SCENE_NS::LightType::RECT;
+            break;
         default:
             sceneLightType = SCENE_NS::LightType::DIRECTIONAL;
             break;
@@ -56,6 +59,9 @@ LightETS::LightETS(const SCENE_NS::ILight::Ptr light)
             break;
         case SCENE_NS::LightType::POINT:
             lightType_ = LightType::POINT;
+            break;
+        case SCENE_NS::LightType::RECT:
+            lightType_ = LightType::RECT;
             break;
         default:
             lightType_ = LightType::DIRECTIONAL;
@@ -213,6 +219,63 @@ void LightETS::SetRange(float range)
 {
     if (auto light = light_.lock()) {
         META_NS::SetValue(light->Range(), range);
+    } else {
+        CORE_LOG_E("no light object");
+    }
+}
+
+float LightETS::GetWidth()
+{
+    if (auto light = light_.lock()) {
+        return META_NS::GetValue(light->RectWidth());
+    } else {
+        CORE_LOG_E("no light object");
+        return 0.0f;
+    }
+}
+
+void LightETS::SetWidth(float width)
+{
+    if (auto light = light_.lock()) {
+        META_NS::SetValue(light->RectWidth(), width);
+    } else {
+        CORE_LOG_E("no light object");
+    }
+}
+
+float LightETS::GetHeight()
+{
+    if (auto light = light_.lock()) {
+        return META_NS::GetValue(light->RectHeight());
+    } else {
+        CORE_LOG_E("no light object");
+        return 0.0f;
+    }
+}
+
+void LightETS::SetHeight(float height)
+{
+    if (auto light = light_.lock()) {
+        META_NS::SetValue(light->RectHeight(), height);
+    } else {
+        CORE_LOG_E("no light object");
+    }
+}
+
+bool LightETS::GetTwoSided()
+{
+    if (auto light = light_.lock()) {
+        return META_NS::GetValue(light->RectTwoSided());
+    } else {
+        CORE_LOG_E("no light object");
+        return false;
+    }
+}
+
+void LightETS::SetTwoSided(bool twoSided)
+{
+    if (auto light = light_.lock()) {
+        META_NS::SetValue(light->RectTwoSided(), twoSided);
     } else {
         CORE_LOG_E("no light object");
     }

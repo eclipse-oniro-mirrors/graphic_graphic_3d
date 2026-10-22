@@ -97,8 +97,11 @@ namespace OHOS::Render3D::KITETS {
             return ::SceneNodes::LightTypeUnion::make_spot(
                 taihe::make_holder<SpotLightImpl, ::SceneNodes::SpotLight>(light.value));
         case LightETS::LightType::POINT:
-            return ::SceneNodes::LightTypeUnion::make_base(
-                taihe::make_holder<LightImpl, ::SceneNodes::Light>(light.value));
+            return ::SceneNodes::LightTypeUnion::make_point(
+                taihe::make_holder<PointLightImpl, ::SceneNodes::PointLight>(light.value));
+        case LightETS::LightType::RECT:
+            return ::SceneNodes::LightTypeUnion::make_rect(
+                taihe::make_holder<RectLightImpl, ::SceneNodes::RectLight>(light.value));
         default:
             return ::SceneNodes::LightTypeUnion::make_base(
                 taihe::make_holder<LightImpl, ::SceneNodes::Light>(light.value));

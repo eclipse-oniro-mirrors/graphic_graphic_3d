@@ -164,6 +164,7 @@ SCENE_ADDON_PUBLIC void RegisterClasses(napi_env env, napi_value exports)
     PointLightJS::Init(env, scene3dNS);
     DirectionalLightJS::Init(env, scene3dNS);
     SpotLightJS::Init(env, scene3dNS);
+    RectLightJS::Init(env, scene3dNS);
     GeometryJS::Init(env, scene3dNS);
     GeometryDefinition::CubeJS::Init(env, scene3dNS);
     GeometryDefinition::CustomJS::Init(env, scene3dNS);

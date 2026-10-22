@@ -2584,15 +2584,18 @@ void RenderSystem::ProcessLight(const LightProcessData& lpd)
             lc.rectLight.twoSided ? RenderLight::LightUsageFlagBits::LIGHT_USAGE_TWO_SIDED_LIGHT_BIT : 0;
 
         const Math::Vec3 dir = Math::Normalize(light.dir);
-        Math::Vec3 up = Math::Normalize(Math::Cross(dir, Math::Vec3(1.0f, 0.0f, 0.0f)));
-        // Edge case, because dir can be paralell to (1, 0, 0).
-        if (up.x == 0.0f && up.y == 0.0f && up.z == 0.0f) {
-            up = Math::Vec3(0.0f, 1.0f, 0.0f);
-        }
+        // Seed axis kept well away from dir so the cross product is stable for near-parallel cases.
+        const Math::Vec3 seedAxis =
+            (std::abs(dir.x) > 0.9f) ? Math::Vec3(0.0f, 1.0f, 0.0f) : Math::Vec3(1.0f, 0.0f, 0.0f);
+        const Math::Vec3 up = Math::Normalize(Math::Cross(dir, seedAxis));
         const Math::Vec3 right = -Math::Cross(up, dir);
 
-        light.dir = Math::Vec4(right * lc.rectLight.width, lc.rectLight.width);
-        light.spotLightParams = Math::Vec4(up * lc.rectLight.height, lc.rectLight.height);
+        // Avoid zero half-axis lengths in the shader.
+        constexpr float minRectDim = 0.0001f;
+        const float width = Math::max(minRectDim, lc.rectLight.width);
+        const float height = Math::max(minRectDim, lc.rectLight.height);
+        light.dir = Math::Vec4(right * width, width);
+        light.spotLightParams = Math::Vec4(up * height, height);
     }
     light.range = ComponentUtilFunctions::CalculateSafeLightRange(lc.range, lc.intensity);
 
