@@ -16,13 +16,18 @@
 #include "SceneImpl.h"
 
 #include "Vec2Impl.h"
+#include "CameraImpl.h"
 #include "interop_js/arkts_interop_js_api.h"
 #include "interop_js/arkts_esvalue.h"
 #include "SceneJS.h"
 #include "CheckNapiEnv.h"
 #include "RenderConfigurationImpl.h"
 #include "RenderContextImpl.h"
+#include "TaiheErrorUtil.h"
 #include "scene_adapter/scene_adapter.h"
+
+#include <meta/api/deferred_callback.h>
+#include <meta/interface/intf_task_queue_registry.h>
 
 namespace OHOS::Render3D::KITETS {
 
@@ -64,6 +69,134 @@ bool SceneImpl::renderFrame(::taihe::optional_view<::SceneTH::RenderParameters> 
     }
     SceneETS::RenderParameters renderParams = ExtractRenderParameters(params);
     return sceneETS_->RenderFrame(renderParams);
+}
+
+::taihe::future<::taihe::expected<::taihe::array<::SceneResources::RenderTarget>, ::taihe::error>> SceneImpl::snapshot(
+    ::taihe::array_view<::SceneNodes::weak::Camera> cameras,
+    ::taihe::array_view<::SceneTH::RenderTargetParameters> params)
+{
+    using result_type = ::taihe::expected<::taihe::array<::SceneResources::RenderTarget>, ::taihe::error>;
+    auto [completer, future] = taihe::make_async_pair<result_type>();
+
+    if (cameras.size() != params.size()) {
+        WIDGET_LOGE("snapshot: cameras.size(%zu) != params.size(%zu)", cameras.size(), params.size());
+        completer.complete(taihe::unexpected(taihe::error(
+            NapiErrorUtil::ToString(ErrorCode::INVALID_PARAM), static_cast<int32_t>(ErrorCode::INVALID_PARAM))));
+        return std::move(future);
+    }
+
+    if (cameras.empty() || params.empty()) {
+        WIDGET_LOGE("snapshot: cameras or params is empty");
+        completer.complete(taihe::unexpected(taihe::error(NapiErrorUtil::ToString(ErrorCode::INVALID_ARRAY_ELEMENT),
+            static_cast<int32_t>(ErrorCode::INVALID_ARRAY_ELEMENT))));
+        return std::move(future);
+    }
+
+    std::vector<SCENE_NS::ICamera::Ptr> nativeCameras;
+    for (size_t i = 0; i < cameras.size(); i++) {
+        auto cam = cameras[i];
+        if (cam.is_error()) {
+            continue;
+        }
+        auto camOptional = static_cast<::SceneResources::weak::SceneResource>(cam)->getImpl();
+        if (!camOptional.has_value()) {
+            continue;
+        }
+        auto camImpl = reinterpret_cast<CameraImpl*>(camOptional.value());
+        if (!camImpl || !camImpl->getInternalCamera()) {
+            continue;
+        }
+        auto cameraETS = camImpl->getInternalCamera();
+        auto nativeCam = cameraETS->GetCamera().lock();
+        if (nativeCam) {
+            nativeCameras.push_back(nativeCam);
+        }
+    }
+
+    // Extract sizes from RenderTargetParameters
+    std::vector<BASE_NS::Math::UVec2> sizes;
+    for (size_t i = 0; i < params.size(); i++) {
+        auto sz = params[i].size;
+        double x = sz->getX();
+        double y = sz->getY();
+        if (x <= 0.0 || y <= 0.0) {
+            WIDGET_LOGE("snapshot: invalid size [%zu] x=%f y=%f", i, x, y);
+            completer.complete(taihe::unexpected(taihe::error(NapiErrorUtil::ToString(ErrorCode::INVALID_ARRAY_ELEMENT),
+                static_cast<int32_t>(ErrorCode::INVALID_ARRAY_ELEMENT))));
+            return std::move(future);
+        }
+        sizes.push_back(BASE_NS::Math::UVec2(static_cast<uint32_t>(x), static_cast<uint32_t>(y)));
+    }
+
+    // Check for duplicate cameras
+    for (size_t i = 0; i < nativeCameras.size(); i++) {
+        for (size_t j = i + 1; j < nativeCameras.size(); j++) {
+            if (nativeCameras[i].get() == nativeCameras[j].get()) {
+                WIDGET_LOGE("snapshot: duplicate camera");
+                completer.complete(
+                    taihe::unexpected(taihe::error(NapiErrorUtil::ToString(ErrorCode::INVALID_ARRAY_ELEMENT),
+                        static_cast<int32_t>(ErrorCode::INVALID_ARRAY_ELEMENT))));
+                return std::move(future);
+            }
+        }
+    }
+
+    if (!sceneETS_) {
+        WIDGET_LOGE("snapshot: sceneETS_ is null");
+        completer.complete(taihe::unexpected(taihe::error(NapiErrorUtil::ToString(ErrorCode::ENGINE_DESTROYED),
+            static_cast<int32_t>(ErrorCode::ENGINE_DESTROYED))));
+        return std::move(future);
+    }
+
+    auto adapter = std::static_pointer_cast<OHOS::Render3D::SceneAdapter>(*sceneETS_->GetSceneAdapter());
+    if (!adapter) {
+        std::vector<::SceneResources::RenderTarget> empty;
+        completer.complete(result_type(::taihe::array<::SceneResources::RenderTarget>(empty)));
+        return std::move(future);
+    }
+
+    auto sharedCompleter = std::make_shared<decltype(completer)>(std::move(completer));
+
+    const auto arkTsQ = META_NS::GetTaskQueueRegistry().GetTaskQueue(JS_THREAD_DEP);
+    OHOS::Render3D::SnapshotRequest request;
+    request.cameras =
+        BASE_NS::vector<BASE_NS::shared_ptr<SCENE_NS::ICamera>>(nativeCameras.begin(), nativeCameras.end());
+    request.sizes = BASE_NS::vector<BASE_NS::Math::UVec2>(sizes.begin(), sizes.end());
+    request.callback = [sharedCompleter, arkTsQ](BASE_NS::vector<BASE_NS::shared_ptr<OffscreenCaptureData>> results,
+                           int32_t errCode) mutable {
+        auto buildAndComplete = [sharedCompleter, results = BASE_NS::move(results), errCode]() mutable {
+            if (errCode != 0) {
+                auto code = static_cast<ErrorCode>(errCode);
+                sharedCompleter->complete(
+                    result_type(::taihe::unexpected(taihe::error(NapiErrorUtil::ToString(code), errCode))));
+                return;
+            }
+            std::vector<::SceneResources::RenderTarget> retVec;
+            for (const auto& data : results) {
+                if (!data || !data->pixelMap) {
+                    continue;
+                }
+                auto rtETS = std::make_shared<RenderTargetETS>(data);
+                retVec.emplace_back(taihe::make_holder<RenderTargetImpl, ::SceneResources::RenderTarget>(rtETS));
+            }
+
+            if (retVec.empty()) {
+                std::vector<::SceneResources::RenderTarget> empty;
+                sharedCompleter->complete(result_type(::taihe::array<::SceneResources::RenderTarget>(empty)));
+            } else {
+                sharedCompleter->complete(result_type(::taihe::array<::SceneResources::RenderTarget>(retVec)));
+            }
+        };
+        if (arkTsQ) {
+            auto resolveOnArkTs = META_NS::ITaskQueueTask::Ptr(new META_NS::QueueTask(BASE_NS::move(buildAndComplete)));
+            arkTsQ->AddTask(BASE_NS::move(resolveOnArkTs));
+        } else {
+            buildAndComplete();
+        }
+    };
+
+    adapter->RequestSnapshot(std::move(request));
+    return std::move(future);
 }
 
 ::SceneResources::Environment SceneImpl::getEnvironment()

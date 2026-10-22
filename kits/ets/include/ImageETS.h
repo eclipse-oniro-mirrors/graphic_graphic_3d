@@ -33,7 +33,7 @@ public:
     void Cleanup();
 
     META_NS::IObject::Ptr GetNativeObj() const override;
-    SCENE_NS::IImage::Ptr GetNativeImage() const
+    virtual SCENE_NS::IImage::Ptr GetNativeImage() const
     {
         return bitmap_;
     }

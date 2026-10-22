@@ -17,6 +17,9 @@
 #define OHOS_RENDER_3D_SCENE_ADAPTER_H
 
 #include <optional>
+#include <functional>
+#include <mutex>
+#include <condition_variable>
 
 #include "intf_scene_adapter.h"
 #include "intf_surface_buffer_info.h"
@@ -24,6 +27,10 @@
 #include "frame_signal_handle_allocator.h"
 #include "frame_signal_scope.h"
 #include <meta/interface/intf_object.h>
+
+namespace OHOS::Media {
+class PixelMap;
+} // namespace OHOS::Media
 
 #include <base/containers/array_view.h>
 #include <base/containers/shared_ptr.h>
@@ -69,10 +76,36 @@
 #include <render/util/intf_render_frame_util.h>
 
 #include <ohos/platform_data.h>
+#include <surface_buffer.h>
+#include "dma_buffer_manager.h"
 
 namespace OHOS::Render3D {
 
 class TextureLayer;
+
+struct OffscreenCaptureData {
+    sptr<OHOS::SurfaceBuffer> surfaceBuffer;
+    RENDER_NS::RenderHandleReference gpuImageHandle;
+    SCENE_NS::IRenderTarget::Ptr engineBitmap;
+    std::shared_ptr<OHOS::Media::PixelMap> pixelMap;
+    bool pixelMapRequested = false;
+    uint32_t width = 0;
+    uint32_t height = 0;
+
+    ~OffscreenCaptureData()
+    {
+        gpuImageHandle = {};
+        engineBitmap.reset();
+        pixelMap.reset();
+        surfaceBuffer = nullptr;
+    }
+};
+
+struct SnapshotRequest {
+    BASE_NS::vector<BASE_NS::shared_ptr<SCENE_NS::ICamera>> cameras;
+    BASE_NS::vector<BASE_NS::Math::UVec2> sizes;
+    std::function<void(BASE_NS::vector<BASE_NS::shared_ptr<OffscreenCaptureData>>, int32_t)> callback;
+};
 
 class SceneAdapter : public ISceneAdapter {
 public:
@@ -86,6 +119,7 @@ public:
     void SetNeedsRepaint(bool needsRepaint);
     bool NeedsRepaint() override;
     void AcquireImage(const SurfaceBufferInfo& bufferInfo) override;
+    void RequestSnapshot(SnapshotRequest request);
     virtual void SetSceneObj(META_NS::IObject::Ptr pt);
     static void ShutdownPluginRegistry();
     static void DeinitRenderThread();
@@ -113,6 +147,12 @@ protected:
     void AttachSwapchain(META_NS::IObject::Ptr camera);
     void RenderFunction();
     void CreateRenderFunction();
+    BASE_NS::shared_ptr<OffscreenCaptureData> CreateOffscreenRenderTarget(
+        uint32_t width, uint32_t height, size_t index = 0);
+    void SetupSnapshotCameras();
+    void DeliverSnapshot();
+    void SetSnapshotRequest(SnapshotRequest request);
+    SCENE_NS::ICamera::Ptr GetMainCamera();
     void UpdateSurfaceBuffer();
     void InitEnvironmentResource(const uint32_t bufferSize);
     void PropSync();
@@ -141,6 +181,12 @@ protected:
     WindowChangeInfo windowChangeInfo_;
 
     SurfaceBufferInfo sfBufferInfo_;
+
+    std::atomic<bool> snapshotRequested_{false};
+    SnapshotRequest snapshotRequest_;
+    META_NS::Future<int> pendingSnapshot_;
+    int32_t snapshotErrorCode_ = 0;
+    BASE_NS::vector<BASE_NS::shared_ptr<OffscreenCaptureData>> currentSnapshotData_;
 
     bool onWindowChanged_ = false;  // todo engine thread check
     static bool engineInitSuccessful_;

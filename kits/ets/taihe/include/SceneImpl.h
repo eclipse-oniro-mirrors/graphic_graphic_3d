@@ -21,6 +21,7 @@
 #include "SceneTH.Transfer.proj.hpp"
 #include "SceneTH.Transfer.impl.hpp"
 #include "taihe/runtime.hpp"
+#include "taihe/async.hpp"
 #include "stdexcept"
 #include "SceneResources.user.hpp"
 #include "SceneNodes.user.hpp"
@@ -29,6 +30,7 @@
 #include "AnimationImpl.h"
 #include "SceneComponentImpl.h"
 #include "SceneResourceFactoryImpl.h"
+#include "RenderTargetImpl.h"
 #include "SceneETS.h"
 
 #include "scene_adapter/intf_scene_adapter.h"
@@ -76,6 +78,10 @@ public:
         ::taihe::string_view name, ::SceneTH::weak::Scene scene, ::SceneNodes::NodeOrNull parent);
 
     bool renderFrame(::taihe::optional_view<::SceneTH::RenderParameters> params);
+
+    ::taihe::future<::taihe::expected<::taihe::array<::SceneResources::RenderTarget>, ::taihe::error>> snapshot(
+        ::taihe::array_view<::SceneNodes::weak::Camera> cameras,
+        ::taihe::array_view<::SceneTH::RenderTargetParameters> params);
 
     ::SceneTH::SceneComponent createComponentSync(::SceneNodes::weak::Node node, ::taihe::string_view name);
 

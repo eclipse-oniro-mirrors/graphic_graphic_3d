@@ -21,6 +21,7 @@ const char* ToString(Code code)
 {
     switch (code) {
         case OK:                        return "OK";
+        case PARAM_CHECK_FAILED:        return "Parameter check failed";
         case SCENE_REF_LOST:            return "Scene reference lost";
         case SCENE_NOT_INITIALIZED:     return "Scene is not initialized";
         case NATIVE_OBJ_NULL:           return "Native object is null";
@@ -42,6 +43,16 @@ const char* ToString(Code code)
         case ASYNC_INVALID_UID:         return "Invalid UID string";
         case INTERNAL_ERROR:            return "Internal error";
         case TRANSFER_FAILED:           return "Transfer operation failed";
+        case INVALID_ARRAY_ELEMENT:
+            return OHOS::Render3D::ToString(OHOS::Render3D::RenderErrorCode::INVALID_ARRAY_ELEMENT);
+        case INVALID_PARAM:
+            return OHOS::Render3D::ToString(OHOS::Render3D::RenderErrorCode::INVALID_PARAM);
+        case MEMORY_ALLOC_FAILED:
+            return OHOS::Render3D::ToString(OHOS::Render3D::RenderErrorCode::MEMORY_ALLOC_FAILED);
+        case ENGINE_DESTROYED:
+            return OHOS::Render3D::ToString(OHOS::Render3D::RenderErrorCode::ENGINE_DESTROYED);
+        case RESOURCE_DESTROYED:
+            return OHOS::Render3D::ToString(OHOS::Render3D::RenderErrorCode::RESOURCE_DESTROYED);
         default:                        return "Undefined error code";
     }
 }

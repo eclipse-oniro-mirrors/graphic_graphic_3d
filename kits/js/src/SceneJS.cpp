@@ -24,12 +24,18 @@
 #include "ParamParsing.h"
 #include "Promise.h"
 #include "RenderContextJS.h"
+#include "RenderTargetJS.h"
 #include "SamplerJS.h"
+#include "napi_error_util.h"
 #include "nodejstaskqueue.h"
 #include "EffectJS.h"
 #include "RenderConfigurationJS.h"
+#include "pixel_map_napi.h"
+#include <meta/api/deferred_callback.h>
+#include <scene_adapter/scene_adapter.h>
 static constexpr BASE_NS::Uid IO_QUEUE{"be88e9a0-9cd8-45ab-be48-937953dc258f"};
 static constexpr size_t MAX_LOAD_ARG_COUNT{2};
+static constexpr size_t SNAPSHOT_ARG_COUNT{2};
 
 #include <meta/api/make_callback.h>
 #include <meta/interface/animation/intf_animation.h>
@@ -147,6 +153,7 @@ void SceneJS::Init(napi_env env, napi_value exports)
             "cloneNode"),
 
         Method<NapiApi::FunctionContext<>, SceneJS, &SceneJS::RenderFrame>("renderFrame"),
+        Method<NapiApi::FunctionContext<>, SceneJS, &SceneJS::Snapshot>("snapshot"),
 
         Method<FunctionContext<Object, Object>, SceneJS, &SceneJS::CreateMeshResource>("createMesh"),
         Method<FunctionContext<Object, Object>, SceneJS, &SceneJS::CreateGeometry>("createGeometry"),
@@ -174,6 +181,8 @@ void SceneJS::Init(napi_env env, napi_value exports)
     if (mis) {
         mis->StoreCtor("Scene", func);
     }
+
+    RenderTargetJS::Init(env, exports);
 }
 
 void SceneJS::RegisterEnums(NapiApi::Object exports)
@@ -926,6 +935,182 @@ napi_value SceneJS::RenderFrame(NapiApi::FunctionContext<>& ctx)
     }
 #endif
     return ctx.GetBoolean(true);
+}
+
+napi_value SceneJS::Snapshot(NapiApi::FunctionContext<>& ctx)
+{
+    LUME_TRACE_FUNC()
+    const auto env = ctx.GetEnv();
+    auto promise = Promise(env);
+
+#ifdef __SCENE_ADAPTER__
+    if (ctx.ArgCount() < SNAPSHOT_ARG_COUNT) {
+        WIDGET_LOGE("snapshot: arg count < %zu", SNAPSHOT_ARG_COUNT);
+        return promise.Reject(NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::PARAM_CHECK_FAILED, nullptr));
+    }
+
+    napi_value camerasArray = ctx.Value(0);
+    napi_value paramsArray = ctx.Value(1);
+
+    bool isArray = false;
+    napi_is_array(env, camerasArray, &isArray);
+    if (!isArray) {
+        WIDGET_LOGE("snapshot: cameras is not array");
+        return promise.Reject(NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::PARAM_CHECK_FAILED, nullptr));
+    }
+    napi_is_array(env, paramsArray, &isArray);
+    if (!isArray) {
+        WIDGET_LOGE("snapshot: params is not array");
+        return promise.Reject(NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::PARAM_CHECK_FAILED, nullptr));
+    }
+
+    uint32_t camerasLen = 0;
+    uint32_t paramsLen = 0;
+    napi_get_array_length(env, camerasArray, &camerasLen);
+    napi_get_array_length(env, paramsArray, &paramsLen);
+
+    if (camerasLen != paramsLen) {
+        WIDGET_LOGE("snapshot: camerasLen(%u) != paramsLen(%u)", camerasLen, paramsLen);
+        return promise.Reject(NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::INVALID_PARAM, nullptr));
+    }
+
+    if (camerasLen == 0 || paramsLen == 0) {
+        WIDGET_LOGE("snapshot: cameras or params is empty");
+        return promise.Reject(NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::INVALID_ARRAY_ELEMENT, nullptr));
+    }
+
+    OHOS::Render3D::SnapshotRequest request;
+    for (uint32_t i = 0; i < camerasLen; i++) {
+        napi_value cameraElem;
+        napi_get_element(env, camerasArray, i, &cameraElem);
+        NapiApi::Object cameraObj(env, cameraElem);
+        CameraJS* cameraJs = nullptr;
+        if (auto* root = cameraObj.GetRoot()) {
+            cameraJs = static_cast<CameraJS*>(root->GetInstanceImpl(CameraJS::ID));
+        }
+        if (!cameraJs) {
+            WIDGET_LOGE("snapshot: cameraJs is null at index %u", i);
+            return promise.Reject(NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::PARAM_CHECK_FAILED, nullptr));
+        }
+        auto icamera = interface_pointer_cast<SCENE_NS::ICamera>(cameraJs->GetNativeObject());
+        if (!icamera) {
+            WIDGET_LOGE("snapshot: icamera is null at index %u", i);
+            return promise.Reject(NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::PARAM_CHECK_FAILED, nullptr));
+        }
+        request.cameras.push_back(icamera);
+
+        napi_value paramElem;
+        napi_get_element(env, paramsArray, i, &paramElem);
+        NapiApi::Object paramObj(env, paramElem);
+        uint32_t w = 0;
+        uint32_t h = 0;
+        napi_value sizeVal = paramObj.Get("size");
+        if (sizeVal) {
+            NapiApi::Object sizeObj(env, sizeVal);
+            napi_value xVal = sizeObj.Get("x");
+            napi_value yVal = sizeObj.Get("y");
+            double xD = 0.0;
+            double yD = 0.0;
+            if (xVal) {
+                if (napi_get_value_double(env, xVal, &xD) != napi_ok) {
+                    WIDGET_LOGE("snapshot: invalid x at index %u", i);
+                    return promise.Reject(
+                        NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::PARAM_CHECK_FAILED, nullptr));
+                }
+            } else {
+                xD = static_cast<double>(w);
+            }
+            if (yVal) {
+                if (napi_get_value_double(env, yVal, &yD) != napi_ok) {
+                    WIDGET_LOGE("snapshot: invalid y at index %u", i);
+                    return promise.Reject(
+                        NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::PARAM_CHECK_FAILED, nullptr));
+                }
+            } else {
+                yD = static_cast<double>(h);
+            }
+            if (xD <= 0.0 || yD <= 0.0) {
+                WIDGET_LOGE("snapshot: invalid size [%u] x=%f y=%f", i, xD, yD);
+                return promise.Reject(NapiErrorUtil::MakeErrorObject(env,
+                    NapiErrorUtil::INVALID_ARRAY_ELEMENT, nullptr));
+            }
+            w = static_cast<uint32_t>(xD);
+            h = static_cast<uint32_t>(yD);
+        }
+        request.sizes.push_back(BASE_NS::Math::UVec2(w, h));
+    }
+
+    // Check for duplicate cameras
+    for (size_t i = 0; i < request.cameras.size(); i++) {
+        for (size_t j = i + 1; j < request.cameras.size(); j++) {
+            if (request.cameras[i].get() == request.cameras[j].get()) {
+                WIDGET_LOGE("snapshot duplicate camera");
+                return promise.Reject(
+                    NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::INVALID_ARRAY_ELEMENT, nullptr));
+            }
+        }
+    }
+
+    const auto jsQ = META_NS::GetTaskQueueRegistry().GetTaskQueue(JS_THREAD_DEP);
+
+    auto innerCallback = [promise, jsQ, env](
+        BASE_NS::vector<BASE_NS::shared_ptr<OHOS::Render3D::OffscreenCaptureData>> results, int32_t errCode) mutable {
+        auto resolveOnJs = META_NS::ITaskQueueTask::Ptr(
+            new META_NS::QueueTask([results = BASE_NS::move(results), promise, env, errCode]() mutable {
+                if (errCode != 0) {
+                    auto code = static_cast<NapiErrorUtil::Code>(errCode);
+                    promise.Reject(NapiErrorUtil::MakeErrorObject(env, code, nullptr));
+                    return;
+                }
+
+                if (results.empty()) {
+                    napi_value emptyArray;
+                    napi_create_array(env, &emptyArray);
+                    promise.Resolve(emptyArray);
+                    return;
+                }
+
+                napi_value resultArray;
+                napi_create_array(env, &resultArray);
+
+                for (uint32_t i = 0; i < results.size(); i++) {
+                    if (!results[i]) {
+                        continue;
+                    }
+                    napi_value rtObj = RenderTargetJS::NewInstance(env);
+                    if (!rtObj) {
+                        promise.Reject("Snapshot failed: could not create RenderTarget JS object");
+                        return;
+                    }
+                    auto* rtJS = RenderTargetJS::GetImpl(env, rtObj);
+                    if (rtJS) {
+                        rtJS->SetCaptureData(results[i]);
+                    }
+                    napi_set_element(env, resultArray, i, rtObj);
+                }
+                promise.Resolve(resultArray);
+            }));
+        jsQ->AddTask(BASE_NS::move(resolveOnJs));
+    };
+
+    auto sharedCallback = std::make_shared<decltype(innerCallback)>(std::move(innerCallback));
+    request.callback = [sharedCallback](
+        BASE_NS::vector<BASE_NS::shared_ptr<OHOS::Render3D::OffscreenCaptureData>> results,
+        int32_t errCode) {
+        (*sharedCallback)(BASE_NS::move(results), errCode);
+    };
+
+    auto sceneAdapter = std::static_pointer_cast<OHOS::Render3D::SceneAdapter>(scene_);
+    if (!sceneAdapter) {
+        WIDGET_LOGE("snapshot: sceneAdapter is null");
+        return promise.Reject(NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::ENGINE_DESTROYED, nullptr));
+    }
+
+    sceneAdapter->RequestSnapshot(std::move(request));
+#else
+    promise.Reject("Snapshot not supported without scene adapter");
+#endif
+    return promise;
 }
 
 napi_value SceneJS::CreateComponent(NapiApi::FunctionContext<NapiApi::Object, BASE_NS::string>& ctx)

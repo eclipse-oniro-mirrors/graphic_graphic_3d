@@ -2226,8 +2226,10 @@ void RenderSystem::ProcessCameras(
     unordered_map<uint64_t, uint64_t> mvChildToParent;  // multi-view child to parent
     RenderScene::Flags sceneFlags{0u};
 
-    const auto hasOcclusionMaterial =
-        dsMaterial_->GetRenderFrameObjectInfo().renderMaterialFlags & RENDER_MATERIAL_OCCLUSION_BIT;
+    const auto renderMaterialFlags = dsMaterial_->GetRenderFrameObjectInfo().renderMaterialFlags;
+    const auto hasOcclusionMaterial = renderMaterialFlags & RENDER_MATERIAL_OCCLUSION_BIT;
+    // pre-pass cameras use camera slots even when not rendered, so allowed ones are added only for material needs
+    const auto hasTransmissionMaterial = renderMaterialFlags & RENDER_MATERIAL_TRANSMISSION_BIT;
 
     for (const auto& row : queryResults) {
         const auto id = row.components[0U];
@@ -2333,8 +2335,10 @@ void RenderSystem::ProcessCameras(
 
         // NOTE: setting up the color pre pass with a target name is a temporary solution
         uint64_t prePassCameraHash = 0U;
-        const bool createPrePassCam = (component.pipelineFlags & CameraComponent::FORCE_COLOR_PRE_PASS_BIT) ||
-                                      (component.pipelineFlags & CameraComponent::ALLOW_COLOR_PRE_PASS_BIT);
+        const bool createPrePassCam =
+            ((component.pipelineFlags & CameraComponent::FORCE_COLOR_PRE_PASS_BIT) ||
+                (hasTransmissionMaterial && (component.pipelineFlags & CameraComponent::ALLOW_COLOR_PRE_PASS_BIT)));
+
         if (createPrePassCam) {
             prePassCameraHash = Hash(camera.id, camera.id);
             camera.prePassColorTargetName = renderScene.name +
@@ -2628,6 +2632,7 @@ void RenderSystem::ProcessShadowCamera(const LightProcessData lpd, RenderLight& 
     if (light.shadowCameraIndex >= DefaultMaterialCameraConstants::MAX_CAMERA_COUNT) {
         light.shadowCameraIndex = ~0u;
         light.lightUsageFlags &= (~RenderLight::LightUsageFlagBits::LIGHT_USAGE_SHADOW_LIGHT_BIT);
+        dsCamera_->NotifyDroppedCamera();
 #if (CORE3D_VALIDATION_ENABLED == 1)
         const string onceName = string(to_string(light.id) + "_too_many_cam");
         PLUGIN_LOG_ONCE_W(onceName, "CORE3D_VALIDATION: shadow camera dropped, too many cameras in scene");
@@ -3252,6 +3257,11 @@ array_view<const RenderHandleReference> RenderSystem::GetRenderNodeGraphs() cons
     } else {
         return {};
     }
+}
+
+uint32_t RenderSystem::GetDroppedCameraCount() const
+{
+    return dsCamera_ ? dsCamera_->GetDroppedCameraCount() : 0;
 }
 
 RenderSystem::CameraData RenderSystem::UpdateAndGetPreviousFrameCameraData(

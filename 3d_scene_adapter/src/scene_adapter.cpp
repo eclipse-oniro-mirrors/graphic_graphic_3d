@@ -14,11 +14,13 @@
  */
 
 #include "scene_adapter/scene_adapter.h"
-
 #include "scene_adapter/frame_hook_registry.h"
 
+#include "pixel_map.h"
 #include <dlfcn.h>
 #include <memory>
+#include <mutex>
+#include <condition_variable>
 #include <string_view>
 
 #include "napi/native_api.h"
@@ -56,11 +58,13 @@
 #include <3d/ecs/components/environment_component.h>
 #include <3d/ecs/components/render_handle_component.h>
 #include <3d/ecs/components/uri_component.h>
+#include <3d/render/intf_render_data_store_default_camera.h>
 #include <scene/ext/intf_internal_scene.h>
 #include <scene/interface/intf_mesh.h>
 #include <scene/interface/intf_material.h>
 #include <scene/ext/intf_render_resource.h>
 #include <scene/interface/intf_camera.h>
+#include <scene/interface/intf_node.h>
 #include <scene/ext/intf_internal_scene.h>
 #include <scene/ext/intf_ecs_context.h>
 #include <scene/interface/intf_application_context.h>
@@ -85,6 +89,7 @@
 #include "widget_trace.h"
 #include "ohos/texture_layer.h"
 #include "lume_render_config.h"
+#include "scene_adapter/render_error_code.h"
 
 #include <cam_preview/namespace.h>
 #include <cam_preview/implementation_uids.h>
@@ -92,9 +97,12 @@
 // surface buffer
 #include <native_buffer.h>
 #include <surface_buffer.h>
+#include <surface_type.h>
+#include <refbase.h>
 #include <securec.h>
 
 #include <3d/ecs/components/camera_component.h>
+#include <3d/util/intf_scene_util.h>
 #ifdef __FG_MODULE__
 #include "scene_adapter/fg_module.h"
 #include <render/datastore/intf_render_data_store_manager.h>
@@ -803,6 +811,7 @@ void SceneAdapter::RenderFunction()
     RETURN_IF_NULL(scene);
     BASE_NS::vector<SCENE_NS::ICamera::Ptr> disabledCameras;
     auto cams = scene->GetCameras().GetResult();
+
     for (auto c : cams) {
         if (!bitmap_ && c->IsActive()) {
             c->SetActive(false);
@@ -846,6 +855,18 @@ void SceneAdapter::RenderFunction()
         AttachSwapchain(interface_pointer_cast<META_NS::IObject>(c));
     }
 
+    bool doSnapshot = snapshotRequested_.load();
+    bool skipFirstRender = (doSnapshot && !bitmap_ && activeCameraCount == 0);
+
+    if (doSnapshot) {
+        SetupSnapshotCameras();
+        if (snapshotErrorCode_ != 0) {
+            currentSnapshotData_.clear();
+            DeliverSnapshot();
+            doSnapshot = false;
+        }
+    }
+
 #ifdef __SR_MODULE__
     if (SRModule::Enable()) {
         SRModule::Update(scene->GetInternalScene());
@@ -859,6 +880,21 @@ void SceneAdapter::RenderFunction()
 #endif
 
     scene->GetInternalScene()->Update(false);
+    if (doSnapshot) {
+        auto internalScene = scene->GetInternalScene();
+        auto ecs = internalScene->GetEcsContext().GetNativeEcs();
+        if (ecs) {
+            auto& sceneUtil = internalScene->GetGraphicsContext().GetSceneUtil();
+            const uint32_t dropped = sceneUtil.GetDroppedCameraCount(*ecs);
+            if (dropped > 0) {
+                WIDGET_LOGE("snapshot: %u cameras dropped, snapshot aborted", dropped);
+                snapshotErrorCode_ = static_cast<int32_t>(RenderErrorCode::INVALID_ARRAY_ELEMENT);
+                currentSnapshotData_.clear();
+                DeliverSnapshot();
+                doSnapshot = false;
+            }
+        }
+    }
     bool receiveBuffer = receiveBuffer_;
     receiveBuffer_ = false;
 
@@ -876,10 +912,19 @@ void SceneAdapter::RenderFunction()
     }
     // Hooks (e.g. SurfaceStream) register their GPU signals before the submit.
     FrameHookRegistry::Instance().PreRenderAll(*rc);
-    rc->GetRenderer().RenderDeferredFrame();
 
-    for (auto& camera : disabledCameras) {
-        camera->SetActive(true);
+    // Single RenderDeferredFrame renders both on-screen (original cameras -> swapchain)
+    // and off-screen (snapshot cameras -> DMA buffers) in one pass.
+    if (!skipFirstRender) {
+        rc->GetRenderer().RenderDeferredFrame();
+        for (auto& camera : disabledCameras) {
+            camera->SetActive(true);
+        }
+    } else {
+        // No swapchain (pure offscreen). Still render: the snapshot cameras
+        // are active and will render to their offscreen targets. Do not re-activate
+        // disabledCameras since there is no swapchain to render to.
+        rc->GetRenderer().RenderDeferredFrame();
     }
 
     // Hooks export their signal fds and feed them to their buffer owners.
@@ -897,6 +942,71 @@ void SceneAdapter::RenderFunction()
         }
         frameSignalScope_.reset();
     }
+
+    if (doSnapshot) {
+        DeliverSnapshot();
+    }
+}
+
+void SceneAdapter::SetupSnapshotCameras()
+{
+    WIDGET_SCOPED_TRACE("SceneAdapter::SetupSnapshotCameras");
+    currentSnapshotData_.clear();
+
+    for (size_t i = 0; i < snapshotRequest_.cameras.size(); i++) {
+        auto data = CreateOffscreenRenderTarget(snapshotRequest_.sizes[i].x, snapshotRequest_.sizes[i].y, i);
+        currentSnapshotData_.push_back(data);
+        if (!data || !snapshotRequest_.cameras[i] || !data->engineBitmap) {
+            WIDGET_LOGW("SetupSnapshotCameras: skipping camera %zu (null data or camera)", i);
+            continue;
+        }
+        auto& cam = snapshotRequest_.cameras[i];
+        cam->SetRenderTarget(data->engineBitmap);
+        cam->SetActive(true);
+    }
+}
+
+void SceneAdapter::DeliverSnapshot()
+{
+    WIDGET_SCOPED_TRACE("SceneAdapter::DeliverSnapshot");
+
+    auto rc = engineInstance_.renderContext_;
+    RETURN_IF_NULL(rc);
+
+    auto sceneObj = GetSceneObj();
+    RETURN_IF_NULL(sceneObj);
+    auto scene = interface_pointer_cast<SCENE_NS::IScene>(sceneObj);
+    RETURN_IF_NULL(scene);
+
+    // Wait for GPU completion and invalidate CPU caches for all SurfaceBuffers
+    rc->GetDevice().WaitForIdle();
+
+    for (size_t i = 0; i < currentSnapshotData_.size(); i++) {
+        if (currentSnapshotData_[i] && currentSnapshotData_[i]->surfaceBuffer) {
+            if (currentSnapshotData_[i]->surfaceBuffer->GetUsage() & BUFFER_USAGE_MEM_MMZ_CACHE) {
+                currentSnapshotData_[i]->surfaceBuffer->Map();
+                currentSnapshotData_[i]->surfaceBuffer->InvalidateCache();
+            }
+        }
+    }
+
+    for (size_t i = 0; i < snapshotRequest_.cameras.size(); i++) {
+        if (snapshotRequest_.cameras[i]) {
+            snapshotRequest_.cameras[i]->SetRenderTarget({});
+            snapshotRequest_.cameras[i]->SetActive(false);
+        }
+    }
+
+    // Invoke callback with OffscreenCaptureData array and error code
+    auto callback = std::move(snapshotRequest_.callback);
+    auto capturedData = std::move(currentSnapshotData_);
+    currentSnapshotData_.clear();
+    snapshotRequest_ = {};
+    snapshotRequested_.store(false);
+    if (callback) {
+        callback(std::move(capturedData), snapshotErrorCode_);
+    }
+    snapshotErrorCode_ = 0;
 }
 
 void SceneAdapter::RenderFrame(bool needsSyncPaint)
@@ -913,8 +1023,9 @@ void SceneAdapter::RenderFrame(bool needsSyncPaint)
     if (!singleFrameAsync_ || !singleFrameSync_ || !propSyncSync_) {
         CreateRenderFunction();
     }
-    if (!onWindowChanged_) {
-        WIDGET_LOGW("window has not changed");
+    // Allow RenderFrame to proceed for snapshot capture even without a swapchain
+    if (!onWindowChanged_ && !snapshotRequested_.load()) {
+        WIDGET_LOGW("SceneAdapter window has not created and no snapshot capture requested");
         return;
     }
     if (propSyncSync_) {
@@ -939,6 +1050,215 @@ bool SceneAdapter::NeedsRepaint()
 void SceneAdapter::SetNeedsRepaint(bool needsRepaint)
 {
     needsRepaint_ = needsRepaint;
+}
+
+SCENE_NS::ICamera::Ptr SceneAdapter::GetMainCamera()
+{
+    auto scene = interface_pointer_cast<SCENE_NS::IScene>(GetSceneObj());
+    if (!scene) {
+        return {};
+    }
+    for (auto c : scene->GetCameras().GetResult()) {
+        uint32_t flags = c->SceneFlags()->GetValue();
+        if ((flags & uint32_t(SCENE_NS::CameraSceneFlag::MAIN_CAMERA_BIT)) && c->IsActive()) {
+            return c;
+        }
+    }
+    return {};
+}
+
+void SceneAdapter::SetSnapshotRequest(SnapshotRequest request)
+{
+    auto engineQ = META_NS::GetTaskQueueRegistry().GetTaskQueue(ENGINE_THREAD);
+    if (!propSyncSync_) {
+        CreateRenderFunction();
+    }
+
+    // No pending snapshot: create a starting point with a no-op task.
+    // PropSync is handled inside the continuation below, not here.
+    if (pendingSnapshot_.GetState() != META_NS::IFuture::WAITING) {
+        auto noop = META_NS::MakeCallback<META_NS::ITaskQueueWaitableTask>(
+            []() -> META_NS::IAny::Ptr { return {}; });
+        pendingSnapshot_ = engineQ->AddWaitableTask(noop);
+    }
+
+    pendingSnapshot_ = pendingSnapshot_.Then(
+        [this, req = std::move(request)](META_NS::IAny::Ptr) mutable -> int {
+            snapshotRequest_ = std::move(req);
+            auto rejectWith = [this](RenderErrorCode code, const char* reason) {
+                WIDGET_LOGE("snapshot: %s", reason);
+                snapshotErrorCode_ = static_cast<int32_t>(code);
+                // Deactivate snapshot-request cameras to prevent them from
+                // occupying render slots after abort. Skip main camera so the
+                // on-screen render target keeps rendering.
+                auto mainCam = bitmap_ ? GetMainCamera() : SCENE_NS::ICamera::Ptr {};
+                for (const auto& cam : snapshotRequest_.cameras) {
+                    if (cam && cam != mainCam) {
+                        cam->SetActive(false);
+                    }
+                }
+                if (snapshotRequest_.callback) {
+                    auto cb = std::move(snapshotRequest_.callback);
+                    snapshotRequest_ = {};
+                    cb({}, snapshotErrorCode_);
+                    snapshotErrorCode_ = 0;
+                }
+            };
+            if (bitmap_) {
+                auto mainCamera = GetMainCamera();
+                for (const auto& cam : snapshotRequest_.cameras) {
+                    if (cam == mainCamera) {
+                        rejectWith(RenderErrorCode::INVALID_ARRAY_ELEMENT, "on-screen main camera in snapshot cameras");
+                        return 0;
+                    }
+                }
+            }
+            snapshotRequested_.store(true);
+            PropSync();
+            RenderFunction();
+            return 0;
+        },
+        engineQ);
+}
+
+void SceneAdapter::RequestSnapshot(SnapshotRequest request)
+{
+    SetSnapshotRequest(std::move(request));
+}
+
+BASE_NS::shared_ptr<OffscreenCaptureData> SceneAdapter::CreateOffscreenRenderTarget(
+    uint32_t width, uint32_t height, size_t index)
+{
+    auto data = BASE_NS::make_shared<OffscreenCaptureData>();
+    data->width = width;
+    data->height = height;
+
+    auto rc = engineInstance_.renderContext_;
+    if (!rc) {
+        WIDGET_LOGE("snapshot: CreateOffscreenRenderTarget: render context is null");
+        return nullptr;
+    }
+
+    size_t estimatedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
+    if (!DmaBufferManager::GetInstance().AcquireQuota(estimatedSize)) {
+        WIDGET_LOGE("snapshot: CreateOffscreenRenderTarget: DMA buffer quota exceeded");
+        snapshotErrorCode_ = static_cast<int32_t>(RenderErrorCode::MEMORY_ALLOC_FAILED);
+        return nullptr;
+    }
+
+    // Step 1: Allocate DMA SurfaceBuffer
+    BufferRequestConfig requestConfig = {
+        .width = static_cast<int32_t>(width),
+        .height = static_cast<int32_t>(height),
+        .strideAlignment = 0x8,
+        .format = GRAPHIC_PIXEL_FMT_RGBA_8888,
+        .usage = BUFFER_USAGE_CPU_READ | BUFFER_USAGE_HW_RENDER | BUFFER_USAGE_HW_TEXTURE |
+                 BUFFER_USAGE_MEM_DMA | BUFFER_USAGE_MEM_MMZ_CACHE,
+        .timeout = 0,
+        .colorGamut = GRAPHIC_COLOR_GAMUT_SRGB,
+        .transform = GRAPHIC_ROTATE_NONE,
+    };
+    data->surfaceBuffer = OHOS::SurfaceBuffer::Create();
+    if (!data->surfaceBuffer || data->surfaceBuffer->Alloc(requestConfig) != OHOS::GSERROR_OK) {
+        WIDGET_LOGE("snapshot: CreateOffscreenRenderTarget: SurfaceBuffer alloc failed");
+        DmaBufferManager::GetInstance().ReleaseQuota(estimatedSize);
+        return nullptr;
+    }
+    // Refine quota with actual allocation size (may be larger due to stride alignment)
+    size_t actualSize = static_cast<size_t>(data->surfaceBuffer->GetSize());
+    if (actualSize > estimatedSize) {
+        if (!DmaBufferManager::GetInstance().AcquireQuota(actualSize - estimatedSize)) {
+            WIDGET_LOGE("snapshot: CreateOffscreenRenderTarget: DMA buffer quota exceeded after alloc");
+            DmaBufferManager::GetInstance().ReleaseQuota(estimatedSize);
+            snapshotErrorCode_ = static_cast<int32_t>(RenderErrorCode::MEMORY_ALLOC_FAILED);
+            return nullptr;
+        }
+    }
+
+    // Step 2: Create PixelMap via SetPixelsAddr (zero-copy binding to DMA buffer)
+    OHOS::Media::InitializationOptions opts;
+    opts.size.width = width;
+    opts.size.height = height;
+    opts.srcPixelFormat = OHOS::Media::PixelFormat::RGBA_8888;
+    opts.pixelFormat = OHOS::Media::PixelFormat::RGBA_8888;
+    opts.alphaType = OHOS::Media::AlphaType::IMAGE_ALPHA_TYPE_UNPREMUL;
+    opts.editable = false;
+    std::unique_ptr<OHOS::Media::PixelMap> pixelMap = OHOS::Media::PixelMap::Create(opts);
+    if (!pixelMap) {
+        WIDGET_LOGE("snapshot: CreateOffscreenRenderTarget: PixelMap::Create failed");
+        DmaBufferManager::GetInstance().ReleaseQuota(actualSize);
+        return nullptr;
+    }
+
+    OH_NativeBuffer* nativeBuffer = data->surfaceBuffer->SurfaceBufferToNativeBuffer();
+    if (!nativeBuffer) {
+        WIDGET_LOGE("snapshot: CreateOffscreenRenderTarget: SurfaceBufferToNativeBuffer failed");
+        DmaBufferManager::GetInstance().ReleaseQuota(actualSize);
+        return nullptr;
+    }
+    OH_NativeBuffer_SetColorSpace(nativeBuffer, OH_COLORSPACE_SRGB_FULL);
+
+    void* nativeBufferRef = data->surfaceBuffer.GetRefPtr();
+    OHOS::RefBase* refBase = reinterpret_cast<OHOS::RefBase*>(nativeBufferRef);
+    refBase->IncStrongRef(refBase);
+    int32_t pixelMapSize = pixelMap->GetByteCount();
+    pixelMap->SetPixelsAddr(data->surfaceBuffer->GetVirAddr(), nativeBufferRef,
+        pixelMapSize, OHOS::Media::AllocatorType::DMA_ALLOC, nullptr);
+
+    size_t dmaBytes = actualSize;
+    auto deleter = [dmaBytes](OHOS::Media::PixelMap* pm) {
+        DmaBufferManager::GetInstance().ReleaseQuota(dmaBytes);
+        delete pm;
+    };
+    data->pixelMap = std::shared_ptr<OHOS::Media::PixelMap>(pixelMap.release(), deleter);
+    data->pixelMapRequested = false;
+
+    // Step 3: Import into Lume engine as GPU Image via CreateView
+    auto& gpuResourceMgr = rc->GetDevice().GetGpuResourceManager();
+    RENDER_NS::GpuImageDesc imageDesc;
+    imageDesc.imageType = RENDER_NS::ImageType::CORE_IMAGE_TYPE_2D;
+    imageDesc.imageViewType = RENDER_NS::ImageViewType::CORE_IMAGE_VIEW_TYPE_2D;
+    imageDesc.format = BASE_NS::Format::BASE_FORMAT_R8G8B8A8_SRGB;
+    imageDesc.imageTiling = RENDER_NS::ImageTiling::CORE_IMAGE_TILING_OPTIMAL;
+    imageDesc.usageFlags = RENDER_NS::ImageUsageFlagBits::CORE_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+        RENDER_NS::ImageUsageFlagBits::CORE_IMAGE_USAGE_SAMPLED_BIT;
+    imageDesc.memoryPropertyFlags = RENDER_NS::MemoryPropertyFlagBits::CORE_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    imageDesc.engineCreationFlags =
+        RENDER_NS::EngineImageCreationFlagBits::CORE_ENGINE_IMAGE_CREATION_DYNAMIC_BARRIERS |
+        RENDER_NS::EngineImageCreationFlagBits::CORE_ENGINE_IMAGE_CREATION_RESET_STATE_ON_FRAME_BORDERS;
+    imageDesc.width = width;
+    imageDesc.height = height;
+    imageDesc.depth = 1u;
+    imageDesc.mipCount = 1u;
+    imageDesc.layerCount = 1u;
+    imageDesc.sampleCountFlags = RENDER_NS::SampleCountFlagBits::CORE_SAMPLE_COUNT_1_BIT;
+
+    RENDER_NS::ImageDescVk platDesc;
+    platDesc.image = VK_NULL_HANDLE;
+    platDesc.imageView = VK_NULL_HANDLE;
+    platDesc.platformHwBuffer = reinterpret_cast<uintptr_t>(nativeBuffer);
+    platDesc.isFormatEffectivelySet = true;
+
+    data->gpuImageHandle = gpuResourceMgr.CreateView("OffscreenRT_" + BASE_NS::to_string(index), imageDesc, platDesc);
+    if (!data->gpuImageHandle) {
+        WIDGET_LOGE("snapshot: CreateOffscreenRenderTarget: CreateView failed");
+        DmaBufferManager::GetInstance().ReleaseQuota(actualSize);
+        return nullptr;
+    }
+
+    // Step 4: Create engine Bitmap (Image implementing IImage + IRenderTarget)
+    auto& obr = META_NS::GetObjectRegistry();
+    auto doc = interface_pointer_cast<META_NS::IMetadata>(obr.GetDefaultObjectContext());
+    data->engineBitmap = obr.Create<SCENE_NS::IRenderTarget>(SCENE_NS::ClassId::Bitmap, doc);
+    if (!data->engineBitmap) {
+        WIDGET_LOGE("snapshot: CreateOffscreenRenderTarget: obr.Create IRenderTarget failed");
+        DmaBufferManager::GetInstance().ReleaseQuota(actualSize);
+        return nullptr;
+    }
+    if (auto renderResource = interface_cast<SCENE_NS::IRenderResource>(data->engineBitmap)) {
+        renderResource->SetRenderHandle(data->gpuImageHandle);
+    }
+    return data;
 }
 
 void SceneAdapter::Deinit()

@@ -96,6 +96,7 @@ private:
     napi_value CloneNode(NapiApi::FunctionContext<NapiApi::Object, NapiApi::Object, BASE_NS::string>& ctx);
 
     napi_value RenderFrame(NapiApi::FunctionContext<>& ctx);
+    napi_value Snapshot(NapiApi::FunctionContext<>& ctx);
 
     napi_value CreateComponent(NapiApi::FunctionContext<NapiApi::Object, BASE_NS::string>& ctx);
     napi_value GetComponent(NapiApi::FunctionContext<NapiApi::Object, BASE_NS::string>& ctx);

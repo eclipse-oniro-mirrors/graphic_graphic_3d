@@ -53,6 +53,17 @@ public:
     napi_value Reject(const BASE_NS::string& reason);
 
     /**
+     * @brief Reject the promise with an error object (e.g. from napi_create_error).
+     * @param error The error napi_value to reject with.
+     * @return This settled promise as a napi_value.
+     * @note Call only from the JS thread. Further calls to Resolve, Reject or Settle will have no effect.
+     */
+    napi_value Reject(napi_value error)
+    {
+        return Settle(error, Action::REJECT);
+    }
+
+    /**
      * @brief Settle the promise.
      * @param result The result of the promise. Should be a reason string when rejecting.
      * @param action Whether to resolve or reject the promise.

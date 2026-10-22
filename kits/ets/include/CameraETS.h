@@ -80,6 +80,11 @@ public:
     BASE_NS::Math::Mat4X4 GetViewMatrix();
     BASE_NS::Math::Mat4X4 GetProjectionMatrix();
 
+    SCENE_NS::ICamera::WeakPtr GetCamera() const
+    {
+        return camera_;
+    }
+
 private:
     inline SCENE_NS::CameraPipeline ToInternalType(const CameraETS::RenderingPipelineType& pipeline);
     inline CameraETS::RenderingPipelineType FromInternalType(const SCENE_NS::CameraPipeline& pipeline);
