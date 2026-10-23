@@ -1,0 +1,8 @@
+{
+  global:
+    gPluginData;
+    _ZN4Core17GetPluginRegisterEv;
+    *RenderNodeGsAIEditRender*;
+  local:
+    *;
+};
