@@ -17,6 +17,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cinttypes>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -1839,8 +1840,8 @@ void GsTilingSystem::ApplyInitialPoolConfig()
     const uint64_t bytesPerSplat = sizeof(GsObjectLoadData::GsSplatData) + 2u * (sizeof(uint32_t) * 2u) +
                                    sizeof(Math::UVec4) + sizeof(uint32_t) + sizeof(float);
     const uint64_t splatCapacity64 = gpuPoolBytesBudget_.load(std::memory_order_relaxed) / bytesPerSplat;
-    CORE_LOG_I("LSGS: ApplyInitialPoolConfig, lastAppliedQualityLevel_ %u, gpuPoolBytesBudget_ %lu, "
-                "splatCapacity64 %lu, bytesPerSplat %lu",
+    CORE_LOG_I("LSGS: ApplyInitialPoolConfig, lastAppliedQualityLevel_ %u, gpuPoolBytesBudget_ %" PRIu64 ", "
+                "splatCapacity64 %" PRIu64 ", bytesPerSplat %" PRIu64,
             lastAppliedQualityLevel_,
             gpuPoolBytesBudget_.load(std::memory_order_relaxed),
             splatCapacity64,
