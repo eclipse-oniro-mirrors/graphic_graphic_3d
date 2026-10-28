@@ -425,6 +425,8 @@ IRenderFrameUtil::WaitResult RenderFrameUtil::AddGpuWait(const WaitData& waitDat
     const auto lock = std::lock_guard(mutex_);
 
     preWaitData_.push_back(WaitData{waitData.nativeFenceFd, WaitStatus::PENDING, waitData.handle});
+    // take over the fdsan ownership of the fd the client handed over
+    ExchangeNativeFenceFdOwnership(waitData.nativeFenceFd, true);
     return WaitResult::ACCEPTED;
 }
 

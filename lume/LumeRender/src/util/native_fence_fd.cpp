@@ -25,6 +25,12 @@
 
 RENDER_BEGIN_NAMESPACE()
 namespace {
+#if defined(__OHOS__)
+// fdsan owner tag of native fence fd held by the renderer: high 32 bits are the domain id,
+// low 32 bits identify the native fence use case
+constexpr uint64_t fdsanTag{ (0xD001402ULL << 32) | 0xD001402ULL };
+#endif
+
 #if RENDER_HAS_NATIVE_FENCE_FD
 // a signaled sync file polls readable, a hang-up or an error without POLLIN never signals
 bool PollNativeFenceFd(const int32_t fd)
@@ -49,11 +55,31 @@ bool PollNativeFenceFd(const int32_t fd)
 #endif
 }  // namespace
 
+// Exchanges the fdsan ownership of a native fence fd: acquiring takes over a fd handed over by a client (tag 0 ->
+// renderer), releasing hands it to e.g. a driver importing the descriptor (renderer -> 0). No-op on platforms without
+// fdsan.
+void ExchangeNativeFenceFdOwnership(const int32_t fd, const bool acquireOwnership)
+{
+#if defined(__OHOS__)
+    if (fd >= 0) {
+        fdsan_exchange_owner_tag(fd, acquireOwnership ? 0 : fdsanTag, acquireOwnership ? fdsanTag : 0);
+    }
+#else
+    PLUGIN_UNUSED(fd);
+    PLUGIN_UNUSED(acquireOwnership);
+#endif
+}
+
 void CloseNativeFenceFd(const int32_t fd)
 {
 #if RENDER_HAS_NATIVE_FENCE_FD
     if (fd >= 0) {
+#if defined(__OHOS__)
+        // close the fd with the renderer tag so fdsan detects an owner mismatch (e.g. a double close)
+        fdsan_close_with_tag(fd, fdsanTag);
+#else
         close(fd);
+#endif
     }
 #else
     PLUGIN_UNUSED(fd);

@@ -847,8 +847,12 @@ void WaitExternalNativeFences(DeviceGLES& device, array_view<IRenderFrameUtil::W
         if (ref.nativeFenceFd < 0) {
             continue;
         }
+        // hand the fdsan ownership of the fd to the driver before importing it
+        ExchangeNativeFenceFdOwnership(ref.nativeFenceFd, false);
         const auto result = device.WaitPlatformNativeFenceFd(ref.nativeFenceFd);
         if (result == DeviceGLES::NativeFenceWait::UNSUPPORTED) {
+            // take the fdsan ownership back before the CPU wait closes the fd
+            ExchangeNativeFenceFdOwnership(ref.nativeFenceFd, true);
             CpuWaitNativeFence(ref);
             continue;
         }
