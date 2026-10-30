@@ -16,16 +16,12 @@
 #ifndef OHOS_RENDER_3D_SCENE_ADAPTER_H
 #define OHOS_RENDER_3D_SCENE_ADAPTER_H
 
-#include <optional>
 #include <functional>
 #include <mutex>
 #include <condition_variable>
 
 #include "intf_scene_adapter.h"
 #include "intf_surface_buffer_info.h"
-#include "frame_hook_registry.h"
-#include "frame_signal_handle_allocator.h"
-#include "frame_signal_scope.h"
 #include <meta/interface/intf_object.h>
 
 namespace OHOS::Media {
@@ -155,6 +151,7 @@ protected:
     SCENE_NS::ICamera::Ptr GetMainCamera();
     void UpdateSurfaceBuffer();
     void InitEnvironmentResource(const uint32_t bufferSize);
+    int32_t CreateFenceFD(const RENDER_NS::IRenderFrameUtil::SignalData& signalData, RENDER_NS::IDevice& device);
     void PropSync();
 
     META_NS::IObject::WeakPtr externalSceneObject_;
@@ -163,8 +160,6 @@ protected:
     RENDER_NS::RenderHandleReference swapchainHandle_;
     RENDER_NS::RenderHandleReference camTransBufferHandle_;
     RENDER_NS::RenderHandleReference bufferFenceHandle_;
-    // Per-frame signal scope for the swapchain release fence.
-    std::optional<FrameSignalScope> frameSignalScope_ = std::nullopt;
     BASE_NS::refcnt_ptr<RENDER_NS::IRenderDataStoreDefaultStaging> renderDataStoreDefaultStaging_;
     CORE_NS::EntityReference camImageEF_;
 

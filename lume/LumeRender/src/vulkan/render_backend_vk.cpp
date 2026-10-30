@@ -584,10 +584,14 @@ vector<VkSemaphore> RenderBackendVk::ImportExternalWaitSemaphores(RenderCommandF
         if (ref.nativeFenceFd < 0) {
             continue;
         }
+        // hand the fdsan ownership of the fd to the driver before importing it
+        ExchangeNativeFenceFdOwnership(ref.nativeFenceFd, false);
         const VkSemaphore semaphore =
             vkImportSemaphoreFdKHR ? ImportNativeFenceSemaphore(device, vkImportSemaphoreFdKHR, ref.nativeFenceFd)
                                    : VK_NULL_HANDLE;
         if (semaphore == VK_NULL_HANDLE) {
+            // take the fdsan ownership back before the CPU wait closes the fd
+            ExchangeNativeFenceFdOwnership(ref.nativeFenceFd, true);
             // nothing of this frame is submitted yet, so a CPU wait still synchronizes it
             CpuWaitNativeFence(ref);
             continue;

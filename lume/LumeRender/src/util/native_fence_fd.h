@@ -31,6 +31,11 @@
 RENDER_BEGIN_NAMESPACE()
 constexpr uint32_t NATIVE_FENCE_CPU_WAIT_TIMEOUT_MS{3000U};
 
+// Exchanges the fdsan ownership of a native fence fd: acquiring takes over a fd handed over by a client (tag 0 ->
+// renderer), releasing hands it to e.g. a driver importing the descriptor (renderer -> 0). No-op on platforms without
+// fdsan.
+void ExchangeNativeFenceFdOwnership(int32_t fd, bool acquireOwnership);
+
 // negative fds are ignored
 void CloseNativeFenceFd(int32_t fd);
 
