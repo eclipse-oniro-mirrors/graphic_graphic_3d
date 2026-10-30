@@ -922,6 +922,7 @@ void SceneAdapter::RenderFunction()
             renderFrameUtil.AddGpuSignal(signalData);
         }
     }
+
     // Hooks (e.g. SurfaceStream) register their GPU signals before the submit.
     FrameHookRegistry::Instance().PreRenderAll(*rc);
 
