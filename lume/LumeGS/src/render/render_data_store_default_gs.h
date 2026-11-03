@@ -347,7 +347,7 @@ public:
 
     // Physics simulation switch
     bool GetPhysicsSimulationEnables() const;
-    bool SetPhysicsSimulationEnables(bool enabled) const;
+    bool SetPhysicsSimulationEnables(bool enabled);
 
     void SetCurrentAnimationTime(const float time);
     float GetCurrentAnimationTime() const;

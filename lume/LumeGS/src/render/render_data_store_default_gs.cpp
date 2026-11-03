@@ -724,12 +724,12 @@ void RenderDataStoreDefaultGS::SetXegUpscaleEnabled(bool enabled)
 }
 
 // Physics simulation switch
-bool RenderDataStoreDefaultGS::GetPhysicsSimulationEnables() const
+bool GetPhysicsSimulationEnables() const
 {
     return physicsSimulationEnabled_;
 }
 
-bool RenderDataStoreDefaultGS::SetPhysicsSimulationEnables(bool enabled) const
+bool SetPhysicsSimulationEnables(bool enabled)
 {
     physicsSimulationEnabled_ = enabled;
 }
