@@ -424,7 +424,7 @@ public:
  
     // Physics simulation switch
     virtual bool GetPhysicsSimulationEnables() const = 0;
-    virtual bool SetPhysicsSimulationEnables(bool enabled) = 0;
+    virtual void SetPhysicsSimulationEnables(bool enabled) = 0;
 };
 } // namespace GS
 

@@ -729,7 +729,7 @@ bool RenderDataStoreDefaultGS::GetPhysicsSimulationEnables() const
     return physicsSimulationEnabled_;
 }
 
-bool RenderDataStoreDefaultGS::SetPhysicsSimulationEnables(bool enabled)
+void RenderDataStoreDefaultGS::SetPhysicsSimulationEnables(bool enabled)
 {
     physicsSimulationEnabled_ = enabled;
 }
