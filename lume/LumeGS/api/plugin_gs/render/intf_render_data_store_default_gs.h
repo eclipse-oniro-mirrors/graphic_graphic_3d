@@ -421,6 +421,10 @@ public:
     // XEG Upscale configuration
     virtual float GetXegUpscaleFactor() const = 0;
     virtual void SetXegUpscaleFactor(float factor) = 0;
+ 
+    // Physics simulation switch
+    virtual bool GetPhysicsSimulationEnables() const = 0;
+    virtual bool SetPhysicsSimulationEnables(bool enabled) const = 0;
 };
 } // namespace GS
 

@@ -723,6 +723,17 @@ void RenderDataStoreDefaultGS::SetXegUpscaleEnabled(bool enabled)
     xegUpscaleEnabled_ = enabled;
 }
 
+// Physics simulation switch
+bool GetPhysicsSimulationEnables() const
+{
+    return physicsSimulationEnabled_;
+}
+
+bool SetPhysicsSimulationEnables(bool enabled) const
+{
+    physicsSimulationEnabled_ = enabled;
+}
+
 void RenderDataStoreDefaultGS::SetCurrentAnimationTime(const float time)
 {
     animationTimeSeconds_ = time;
