@@ -1819,7 +1819,7 @@ void RenderNodeGsRender::ExecuteFrame(RENDER_NS::IRenderCommandList& cmdList)
         }
     } else {
         const bool requestGpuSort = sortResourcesChanged ||
-                                    ((sceneAnimationActive||dataStore_->GetPhysicsSimulationEnables()) &&
+                                    ((sceneAnimationActive||dataStore_->GetPhysicsSimulationEnabled()) &&
                                      !gpuSortInProgress_);
         if (!sortViewChanged && requestGpuSort) {
             BeginGpuSort();
@@ -2007,7 +2007,7 @@ void RenderNodeGsRender::ExecuteFrame(RENDER_NS::IRenderCommandList& cmdList)
     const bool previewRenderReq = !useRenderIfDirty_ || cameraMoved || viewportChanged || sceneDataChanged ||
                                   resourcesNeedInit || sceneAnimationActive || dynamicRenderingActive ||
                                   dynamicRenderingWasActive || editorActive || shWorkPending ||
-                                  dataStore_->GetPhysicsSimulationEnables();
+                                  dataStore_->GetPhysicsSimulationEnabled();
     const bool accumFrameReq =
         !finalAccumBlocked &&
         (!useRenderIfDirty_ || (jitterRendered_ < 4u && !cameraMoved && !sceneAnimationActive &&
@@ -2073,7 +2073,7 @@ void RenderNodeGsRender::ExecuteFrame(RENDER_NS::IRenderCommandList& cmdList)
     const bool keepDirty = !useRenderIfDirty_ || sortWorkPendingAfterPrecompute || isShPending() ||
                            (tiledMode && mergedPrecomputeInProgress_) || jitterWorkRemaining || sceneAnimationActive ||
                            dynamicRenderingActive || editorActive || tiledWaitingForTiles ||
-                           dataStore_->GetPhysicsSimulationEnables();
+                           dataStore_->GetPhysicsSimulationEnabled();
     dataStore_->SetDirtyForGsModel(0u, keepDirty);
 
     frameIdx_++;
@@ -2195,7 +2195,7 @@ void RenderNodeGsRender::BindPrecomputeDescriptorSet(
 
 
     const bool useRenderSplats = (renderData->useAnimations && !renderData->CanUsePackedData()) || gsEditor_ ||
-                                 dataStore_->GetPhysicsSimulationEnables();
+                                 dataStore_->GetPhysicsSimulationEnabled();
     const auto splatHandle =
         useRenderSplats ? gsHandlesCache_.gsSplatDataRender.GetHandle() : gsHandlesCache_.gsSplatData.GetHandle();
     const bool useIndirect = gsEditor_ && gsEditor_->GetNumModifyingPasses() > 0;
@@ -2248,7 +2248,7 @@ void RenderNodeGsRender::ExecuteGpuSort(
             cmdList.BindPipeline(psoData.psoHandle);
         }
 
-        if (renderData->useAnimations || gsEditor_ || dataStore_->GetPhysicsSimulationEnables()) {
+        if (renderData->useAnimations || gsEditor_ || dataStore_->GetPhysicsSimulationEnabled()) {
             preSortSet->BindBuffer(0u, gsHandlesCache_.gsSplatDataRender.GetHandle(), 0);
         } else {
             preSortSet->BindBuffer(0u, gsHandlesCache_.gsSplatData.GetHandle(), 0);
@@ -2974,7 +2974,7 @@ void RenderNodeGsRender::ExecuteComputeSphericalHarmonics(RENDER_NS::IRenderComm
 
 void RenderNodeGsRender::ExecuteAnimationPass(RENDER_NS::IRenderCommandList& cmdList, GS::GsRenderData* renderData)
 {
-    if (!renderData || !renderData->useAnimations || gsEditor_ || dataStore_->GetPhysicsSimulationEnables()) {
+    if (!renderData || !renderData->useAnimations || gsEditor_ || dataStore_->GetPhysicsSimulationEnabled()) {
         return;
     }
 
