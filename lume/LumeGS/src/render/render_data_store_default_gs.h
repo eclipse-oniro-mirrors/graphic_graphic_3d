@@ -346,8 +346,8 @@ public:
     void SetXegUpscaleEnabled(bool enabled) override;
 
     // Physics simulation switch
-    bool GetPhysicsSimulationEnabled() const;
-    void SetPhysicsSimulationEnabled(bool enabled);
+    bool GetPhysicsSimulationEnabled() const override;
+    void SetPhysicsSimulationEnabled(bool enabled) override;
 
     void SetCurrentAnimationTime(const float time);
     float GetCurrentAnimationTime() const;
