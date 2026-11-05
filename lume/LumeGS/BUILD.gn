@@ -83,6 +83,13 @@ config("gs_config") {
     "VMA_STATS_STRING_ENABLED=0",
     "VMA_STATIC_VULKAN_FUNCTIONS=0",
   ]
+
+  if (ohos_indep_compiler_enable) {
+    # The independent build does not check out the DEPS externals of skia, so
+    # third_party/skia/m133/third_party/externals/libwebp is not on disk and
+    # webp/decode.h cannot be found. Drop the loader instead of the build.
+    defines += [ "LUME_GS_NO_WEBP=1" ]
+  }
 }
 
 lume_compile_shader("gs_compile_shader") {
@@ -259,6 +266,14 @@ ohos_source_set("3d_gs_src") {
     "skia:libwebpm133",
     "node:node_header_notice",
   ]
+
+  if (ohos_indep_compiler_enable) {
+    # skia's webp headers are not available in the independent build, see
+    # LUME_GS_NO_WEBP above. The header stays so component_dll can keep its
+    # include; only the implementation and the skia dependency go away.
+    sources -= [ "src/webp/image_loader_webp.cpp" ]
+    external_deps -= [ "skia:libwebpm133" ]
+  }
 
   defines = []
 

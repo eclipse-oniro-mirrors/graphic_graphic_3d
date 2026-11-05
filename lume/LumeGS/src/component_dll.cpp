@@ -69,7 +69,7 @@
 #include "render/watercolor/render_effects_watercolor_node.h"
 #include "util/gs_picking.h"
 
-#ifdef __OHOS_PLATFORM__
+#if defined(__OHOS_PLATFORM__) && !defined(LUME_GS_NO_WEBP)
 #include "webp/image_loader_webp.h"
 #endif
 
@@ -95,7 +95,7 @@ static constexpr RENDER_NS::IShaderManager::ShaderFilePathDesc SHADER_FILE_PATHS
     "gsvertexinputdeclarations://",
 };
 
-#ifdef __OHOS_PLATFORM__
+#if defined(__OHOS_PLATFORM__) && !defined(LUME_GS_NO_WEBP)
 static constexpr CORE_NS::IImageLoaderManager::ImageLoaderTypeInfo WEBP_LOADER {
     { CORE_NS::IImageLoaderManager::ImageLoaderTypeInfo::UID },
     nullptr,
@@ -578,7 +578,7 @@ PluginToken RegisterInterfaces(IPluginRegister& pluginRegistry)
     }
     pluginRegistry.RegisterTypeInfo(RENDER_PLUGIN);
     pluginRegistry.RegisterTypeInfo(CORE3D_PLUGIN);
-#ifdef __OHOS_PLATFORM__
+#if defined(__OHOS_PLATFORM__) && !defined(LUME_GS_NO_WEBP)
     pluginRegistry.RegisterTypeInfo(WEBP_LOADER);
 #endif
     META_NS::GetObjectRegistry().RegisterObjectType<GS_ADDON_NS::GSNode>();
@@ -588,7 +588,7 @@ PluginToken RegisterInterfaces(IPluginRegister& pluginRegistry)
 void UnregisterInterfaces(PluginToken token)
 {
     auto& pluginRegistry = *static_cast<IPluginRegister*>(token);
-#ifdef __OHOS_PLATFORM__
+#if defined(__OHOS_PLATFORM__) && !defined(LUME_GS_NO_WEBP)
     pluginRegistry.UnregisterTypeInfo(WEBP_LOADER);
 #endif
     pluginRegistry.UnregisterTypeInfo(CORE3D_PLUGIN);
