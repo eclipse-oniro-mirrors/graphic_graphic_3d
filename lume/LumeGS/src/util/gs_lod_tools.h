@@ -344,6 +344,14 @@ void CullTransparentGaussians(GS::GsPrimitive& primitive, GS::GsObjectLoadDataEx
         sphericalHarmonics.reserve(primitive.numGs);
     }
 
+    // Keep srParams in sync with the compacted arrays so that srParams[ii] still
+    // matches surviving gaussian ii (uploaded after culling)
+    BASE_NS::vevtor<Math::Vec3> srParams;
+    const bool compactSrParams = loadData->srParams.size() == static_cast<size_t>(primitive.numGS);
+    if (compactSrParams) {
+        srParams.reserve(primitive.numGS);
+    }
+
     for (size_t ii = 0; ii < primitive.numGs; ii++) {
         const GsObjectLoadData::GsSplatData& vd = loadData->gsVerticesData.Get(ii);
 
@@ -355,6 +363,9 @@ void CullTransparentGaussians(GS::GsPrimitive& primitive, GS::GsObjectLoadDataEx
         if (primitive.RequireSH()) {
             sphericalHarmonics.emplace_back(loadData->sphericalHarmonics[ii]);
         }
+        if (compactSrParams) {
+            srParams.emplace_back(loadData->srParams[ii]);
+        }
     }
 
     loadData->gaussianPositions = positions;
@@ -362,6 +373,9 @@ void CullTransparentGaussians(GS::GsPrimitive& primitive, GS::GsObjectLoadDataEx
     loadData->gsVerticesData.ShrinkToFit();
     if (primitive.RequireSH()) {
         loadData->sphericalHarmonics = sphericalHarmonics;
+    }
+    if (compactSrParams) {
+        loadData->srParams = BASE_NS::move(srParams);
     }
 
     const uint32_t newNumGs = static_cast<uint32_t>(loadData->gsVerticesData.Size());

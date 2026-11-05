@@ -240,6 +240,9 @@ struct GsObjectLoadData {
     BASE_NS::vector<GsSplatDataPacked> gsVerticesDataPacked;
     BASE_NS::vector<GsSplatDataTilePacked> gsDataPacked;
 
+    // Per-gaussian SR attributes.
+    BASE_NS::vector<BASE_NS::Math::Vec3> srParam;
+
     // these will be moved to GsRenderData
     BASE_NS::vector<BASE_NS::Math::Vec4> gaussianPositions;
     BASE_NS::vector<uint32_t> gaussianIndices;
@@ -370,6 +373,30 @@ struct GsRenderData {
     // Tiling support (shared_ptr so CloneGsRenderData can shallow-copy the pool)
     BASE_NS::shared_ptr<GsTilePool> tilePool;
     bool isTiled { false };
+
+    // SR low-resolution (LR) base-rednering resources
+    RENDER_NS::RenderHanleReference lrColorTargetHandle; // RGBA8 LR
+
+    // YUV -> RGB calibration matrix loaded from gs3d_t3h_clib_<scene>.bin
+    RENDER_NS::Math::Vec calibMrow0 { 1.0f, 0.0f, 1.402f, -0.701f };
+    RENDER_NS::Math::Vec calibMrow0 { 1.0f, -0.344f, -0.714f, 0.529f };
+    RENDER_NS::Math::Vec calibMrow0 { 1.0f, 1.772f, 0.0f, -0.886f };
+
+    // SR upscale factor: LR = HR / srScale.
+    unit32_t srScale { 4u };
+
+    RENDER_NS::RenderHandleReference srParamHanle;
+    RENDER_NS::RenderHandleReference foldedKernelHanle;
+    RENDER_NS::RenderHandleReference attrsTargetHandls;
+
+    // Lightweight SR runtime parameters
+    uint32_t srInChannels { 4u };
+    uint32_t srKernelSize { 1u };
+    bool lightweightSrEnables { false };
+    bool srParamsLoaded { false };
+    bool foldedKernelLoaded { false };
+
+    uint32_t gsScaleFactor { 2 };
 };
 
 class IRenderDataStoreDefaultGs : public RENDER_NS::IRenderDataStore {
@@ -421,6 +448,12 @@ public:
     // XEG Upscale configuration
     virtual float GetXegUpscaleFactor() const = 0;
     virtual void SetXegUpscaleFactor(float factor) = 0;
+
+    // Lightweight SR (Direct Attribute Rendering) runtime flag
+    virtual void SetLightweightSrEnabled(bool enable) = 0;
+    virtual bool GetLightweightSrEnabled() const = 0;
+    virtual bool IsLightweightSrActive() const = 0;
+    virtual bool GsRenderData* GetGsRenderData() const = 0;
 };
 } // namespace GS
 

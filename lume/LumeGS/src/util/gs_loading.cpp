@@ -73,6 +73,10 @@ static PlyFormatType ClassifyPlyFormat(const BASE_NS::vector<PlyProperty>& props
     if (n == GS_FULL_HARMONICS_HEADER_SIZE) {
         return PlyFormatType::FullHarmonics;
     }
+    // 66-property SR format
+    if (n == GS_FULL_HARMONICS_FILTER_SR_HEADER_SIZE) {
+        return PlyFormatType::FullHarmonicsFilterSrParams;
+    }
     if (n == GS_RESTRICTED_HARMONICS_HEADER_SIZE) {
         return PlyFormatType::RestrictedHarmonics;
     }
@@ -122,6 +126,48 @@ float GS::ComputeSplatExtent(
     return BASE_NS::Math::sqrt(maxEigenvalue) * stdDevMultiplier;
 }
 
+static void CreatLightweightSrTargets(GS::GsRenderData* renderData, const GS::GsLoadContext& loadCtx,
+    const BASE_NS::Math::UVec2 renderSize, const GpuImageDesc& desc)
+{
+    RENDER_NS::IGpuResourceManager& gpuResourceMgr = loadCtx.renderContext_->GetDevice().GetGpuResourceManager();
+
+    // Lightweight SR LR render targets, created at LR = HR / srScale and only
+    // allocated when lightweight SR is active.
+    if (renderData->lightweightSrEnabled) {
+        const uint32_t lrW = renderSize.x / renderData->srScale;
+        const uint32_t lrH = renderSize.y / renderData->srScale;
+
+        GpuImageDesc lrColorDesc = desc;
+        lrColorDesc.format = Format::BASE_FORMAT_R8G8B8A8_UNORM;
+        lrColorDesc.width = lrW;
+        lrColorDesc.height = lrH;
+        renderData->lrColorTargetHandle = 
+            gpuResourceMgr.Create("GS3DLrColor_" + loadCtx.uniqueName, lrColorDesc);
+        
+        // SR attrs target: RGBA16F, LR, MRT, attachment 1 of the lightweight
+        // gaussian render pass; accumulates per-gaussian srParams via
+        // premultiplied-alpha blending. Read by gs3d_lightweight_sr.comp
+        GpuImageDesc lrAttrsDesc;
+        lrAttrsDesc.width = lrW;
+        lrAttrsDesc.height = lrH;
+        lrAttrsDesc.depth = 1;
+        lrAttrsDesc.memoryPropertyFlags = MemoryPropertyFlagBits::CORE_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        lrAttrsDesc.usageFlags = ImageUsageFlagBits::CORE_IMAGE_USAGE_SAMPLED_BIT |
+                                 ImageUsageFlagBits::CORE_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                                 ImageUsageFlagBits::CORE_IMAGE_USAGE_STORAGE_BIT |
+                                 ImageUsageFlagBits::CORE_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                                 ImageUsageFlagBits::CORE_IMAGE_USAGE_TRANSFER_DST_BIT;
+        lrAttrsDesc.imageType = ImageType::CORE_IMAGE_TYPE_2D;
+        lrAttrsDesc.imageTiling = ImageTiling::CORE_IMAGE_TILING_OPTIMAL;
+        lrAttrsDesc.imageViewType = ImageViewType::CORE_IMAGE_VIEW_TYPE_2D;
+        desc.format = Format::BASE_FORMAT_R16G16B16A16_SFLOAT;
+        lrAttrsDesc.engineCreationFlags = 
+            EngineImageCreationFlagBits::CORE_ENGINE_IMAGE_CREATION_DYNAMIC_BARRIERS;
+        renderData->attrsTargetHandle = 
+            gpuResourceMgr.Create("GS3DAttrs_" + loadCtx.uniqueName, lrAttrsDesc);
+    }
+}    
+
 void CreateGaussianRenderTargets(GS::GsRenderData* renderData, const GS::GsLoadContext& loadCtx, GpuImageDesc& desc,
     const BASE_NS::Math::UVec2 renderSize, const BASE_NS::Math::UVec2 resolution)
 {
@@ -143,8 +189,13 @@ void CreateGaussianRenderTargets(GS::GsRenderData* renderData, const GS::GsLoadC
         renderData->gaussianRenderTarget2 = gpuResourceMgr.Create("GS3DRenderTarget2_" + loadCtx.uniqueName, desc);
         renderData->gaussianRenderTarget3 = gpuResourceMgr.Create("GS3DRenderTarget3_" + loadCtx.uniqueName, desc);
     } else {
-        desc.width = renderSize.x;
-        desc.height = renderSize.y;
+        if (renderData->lightweightSrEnabled && loadCtx.dataStore_->GetGsScaleFactor() == 1u) {
+            desc.width = 2u;
+            desc.height = 2u;
+        } else {
+            desc.width = renderSize.x;
+            desc.height = renderSize.y;            
+        }
         renderData->gaussianRenderTarget1 = gpuResourceMgr.Create("GS3DRenderTarget1_" + loadCtx.uniqueName, desc);
         renderData->gaussianRenderTarget2 = gpuResourceMgr.Create("GS3DRenderTarget2_" + loadCtx.uniqueName, desc);
         renderData->gaussianRenderTarget3 = gpuResourceMgr.Create("GS3DRenderTarget3_" + loadCtx.uniqueName, desc);
@@ -161,6 +212,7 @@ void CreateGaussianRenderTargets(GS::GsRenderData* renderData, const GS::GsLoadC
     desc.format = Format::BASE_FORMAT_R16G16_SFLOAT;
     renderData->gaussianRenderTargetDepth1 =
         gpuResourceMgr.Create("GS3DRenderTargetDepth1_" + loadCtx.uniqueName, desc);
+    CreatLightweightSrTargets(renderData, loadCtx, renderSize, desc);
 }
 
 void CreateGsRenderImages(
@@ -182,13 +234,17 @@ void CreateGsRenderImages(
     desc.width = depthSize;
     desc.height = depthSize;
     renderData->depthStoreCacheHandle = gpuResourceMgr.Create("GS3DDepthStorageCache_" + loadCtx.uniqueName, desc);
-    desc.format =
-        renderData->use16bitSurfaceTarget ? Format::BASE_FORMAT_R16G16B16A16_UNORM : Format::BASE_FORMAT_R8G8B8A8_UNORM;
+    desc.format = renderData->lightweightSrEnabled
+        ? Format::BASE_FORMAT_R8G8B8A8_UNORM
+        : (renderData->use16bitSurfaceTarget ? Format::BASE_FORMAT_R16G16B16A16_UNORM
+                                             : Format::BASE_FORMAT_R8G8B8A8_UNORM);
     desc.usageFlags =
         ImageUsageFlagBits::CORE_IMAGE_USAGE_SAMPLED_BIT | ImageUsageFlagBits::CORE_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
         ImageUsageFlagBits::CORE_IMAGE_USAGE_STORAGE_BIT | ImageUsageFlagBits::CORE_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-    const float scaleFactor = static_cast<float>(loadCtx.dataStoreGs_->GetGsScaleFactor());
+    const float scaleFactor = renderData->lightweightSrEnabled
+        ? 1.0f
+        : static_cast<float>(loadCtx.dataStoreGs_->GetGsScaleFactor());
     const float upscaleFactor = loadCtx.dataStoreGs_->GetXegUpscaleFactor();
     const BASE_NS::Math::UVec2 renderSize(static_cast<uint32_t>(ceil(resolution.x / scaleFactor / upscaleFactor)),
         static_cast<uint32_t>(ceil(resolution.y / scaleFactor / upscaleFactor)));
@@ -814,6 +870,14 @@ GS::GsPrimitive GS::LoadGaussianData(const BASE_NS::string& gsPath, GS::GsRender
                     return primitive;
                 }
                 break;
+            case PlyFormatType::FullHarmonicsFilterSrParams:
+                if (fileByteLen - headerEndIdx !=
+                    sizeof(PlyVertexDataWithFilterAndSrParams) * static_cast<size_t>(numGaussians)) {
+                    CORE_LOG_E("Invalid GS3D header size for full harmonics with SR params!");
+                    primitive.isValid = false;
+                    return primitive;
+                }
+                break;            
             case PlyFormatType::RestrictedHarmonics:
                 if (fileByteLen - headerEndIdx !=
                     sizeof(PlyVertexDataRestrictedHarmonics) * static_cast<size_t>(numGaussians)) {
@@ -859,6 +923,9 @@ GS::GsPrimitive GS::LoadGaussianData(const BASE_NS::string& gsPath, GS::GsRender
             case PlyFormatType::FullHarmonics:
                 primitive.shDegree = 3u;
                 break;
+            case PlyFormatType::FullHarmonicsFilterSrParams:
+                primitive.shDegree = 3u;
+                break;
             case PlyFormatType::RestrictedHarmonics:
             case PlyFormatType::RestrictedHarmonicsMinimal:
             case PlyFormatType::RestrictedHarmonicsMinimalV2:
@@ -887,6 +954,10 @@ GS::GsPrimitive GS::LoadGaussianData(const BASE_NS::string& gsPath, GS::GsRender
         if (renderData->enableScoreCulling) {
             loadData.gaussianMaxScales.resize(numGaussians);
         }
+    }
+    // Allocate srParams buffer for the lightweight sr format.
+    if (formatType == PlyFormatType::FullHarmonicsFilterSrParams) {
+        loadData.srParams.resize(numGaussians);
     }
 
     if (renderData->CanUsePackedData()) {
@@ -1086,6 +1157,24 @@ GS::GsPrimitive GS::LoadGaussianData(const BASE_NS::string& gsPath, GS::GsRender
     if (loadCtx.shuttingDown_->load()) { // check exit flag
         CORE_LOG_I("GS async load cancelled.");
         return {};
+    }
+
+    // Upload srParams to GPU SSBO for the lightweight SR pipeline. Must stay
+    // beolow CullTransparentGaussians, which compacts loadData.srParams to match
+    // the sutviving gaussians.
+    if (formatType == PlyFormatType::FullHarmonicsFilterSrParams && !loadData.srParams.empty()) {
+        RENDER_NS::IGpuResourceManager& gpuResourceMgr = loadCtx.renderContext_->GetDevice().GetGpuResourceManager();
+        const uint32_t srByteSize = static_cast<uint32_t>(loadData.srParams.size()) * sizeof(BASE_NS::Math::Vec3);
+        BASE_NS::array_view<const unit8_t> srDataView(
+            reinterpret_cast<const unit8_t*>(loadData.srParams.data()), srByteSize);
+        renderData->srParamsHandle = CreateGsBuffer(gpuResourceMgr,
+            BASE_NS::string("GS3DsrParams_") + BASE_NS::string(loadCtx.uniqueName),
+            srByteSize, srDataView,
+            BufferUsageFlagBits::CORE_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+            BufferUsageFlagBits::CORE_BUFFER_USAGE_TRANSFER_DST_BIT,
+            MemoryPropertyFlagBits::CORE_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        CORE_LOG_I("srParams uploaded: %u gaussians", static_cast<uint32_t>(loadData.srParams.size()));
+        renderData->srParamsLoaded = true;
     }
 
     // lodbias > 2.0f can be used to force LODs always on for all models.

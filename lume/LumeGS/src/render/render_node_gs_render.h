@@ -129,6 +129,17 @@ public:
     
     void ExecuteGaussianDebugDrawRenderPass(RENDER_NS::IRenderCommandList& cmdList, GS::GsRenderData* renderData);
 
+    // Lightweight SR LR render pass: render gaussin at LR into 2 MRT attachments.
+    void ExcuteGaussianRenderPassLightweight(RENDER_NS::IRenderCommandList& cmdList,
+        const Math::Mat4X4 viewMatrix, GS::GsRenderData* renderData, const bool isCpuSortDone);
+    // Lightweight sr compute pass folded-convolution + bilinear residual +
+    // UV bilinear + YUV->RGB. Single dispatch weites final RGBA to HR target.
+    void ExcuteLightweightSr(RENDER_NS::IRenderCommandList& cmdList, GS::GsRenderData* renderData);
+    // Bind the lightweight SR compute descriptor set (LR attrs/color, kernel, HR output).
+    void BindLightweightSrDescriptorSet(RENDER_NS::IRenderCommandList& cmdList);
+    // Renturns the HR target for yje current jitter frame (RT0-RT3 when gsScaleFactor > 1)
+    RENDER_NS GetJitteredGaussianRenderTarget() const;
+
     void ExecuteComputeSphericalHarmonics(RENDER_NS::IRenderCommandList& cmdList, GS::GsRenderData* renderData,
         const bool computeAll);
 
@@ -204,6 +215,8 @@ public:
         CompBinders precomputeProjection;
         CompBinders computeSphericalHarmonics;
         CompBinders updateRenderStatusUbo;
+        // Lightweght SR (Direct Attribute Rendering) compute shader binder.
+        CompBinders lightweightSr;
     };
 
     BASE_NS::Math::Mat4X4 GetCamProjMatrix() const
@@ -291,6 +304,7 @@ private:
         RENDER_NS::RenderHandle computeSphericalHarmonics;
         RENDER_NS::RenderHandle computeSphericalHarmonicsPack;
         RENDER_NS::RenderHandle updateRenderStatusUbo;
+        RENDER_NS::RenderHandle lightweightSr;
     } gsRenderShaders_;
 
     // cache all handles used for rendering to guarantee safe usage. Refreshed on every PreExecute
@@ -319,6 +333,13 @@ private:
         RENDER_NS::RenderHandleReference depthStoreCacheHandle;
 
         RENDER_NS::RenderHandleReference gaussianRenderTargetStatusUbo;
+
+        // Lightweight SR resources (invalid on non-SR scenes, intentionally not
+        // part of InValid()).
+        RENDER_NS::RenderHandleReference srParamsHandle;
+        RENDER_NS::RenderHandleReference foldedKernelHandle;
+        RENDER_NS::RenderHandleReference attrsTargetHandle;
+        RENDER_NS::RenderHandleReference lrColorTargetHandle;
 
         RENDER_NS::RenderHandleReference customAnimationShader;
         BASE_NS::vector<RENDER_NS::RenderHandleReference> customAnimationResources;
@@ -368,6 +389,10 @@ private:
             gaussianRenderTargetDepth = {};
             depthStoreCacheHandle = {};
             gaussianRenderTargetStatusUbo = {};
+            srParamsHandle = {};
+            foldedKernelHandle = {};
+            attrsTargetHandle = {};
+            lrColorTargetHandle = {};
             customAnimationShader = {};
 
             customAnimationResources.clear();
@@ -392,6 +417,12 @@ private:
     RENDER_NS::IDescriptorSetBinder::Ptr gsDepthRenderSet0_;
     RENDER_NS::PipelineLayout gsDepthRenderPipelineLayout_;
     RENDER_NS::RenderPass gsDepthRenderPass_;
+
+    // Lightweight SR LR render path resources (2 MRT: color + attrs).
+    RENDER_NS::RenderHandle gsRenderLrLightweightHandle_;
+    RENDER_NS::IDescriptorSetBinder::Ptr gsRenderLrLightweightSet0_;
+    RENDER_NS::PipelineLayout gsRenderLrLightweightPipelineLayout_;
+    RENDER_NS::RenderPass gsRenderLrLightweightPass_;
 
     // prefilter depth
     RENDER_NS::RenderHandle prefilterDepthShaderHandle_;
@@ -528,6 +559,7 @@ private:
 
     bool isSortingCpu_ { false };
     bool radixDone_ { false };
+    bool lightweightSrTiledWarnLogged_ { false };
 
     bool camerasValidCanRender_ { false };
 

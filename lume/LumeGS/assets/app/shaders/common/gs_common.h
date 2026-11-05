@@ -36,12 +36,16 @@
 #define GS_DEPTH_TGS 64
 
 #define GS_DEPTH_APPLY_XY_TGS 16
+#define GS_T3H_TGS 16
 
 #define RADIX_SORT_BINS 256u
 #define NUM_BLOCKS_PER_GROUP 1u
 #define NUM_BLOCKS_PER_GROUP_RADIX 64u
 
 #define UINT32_MAX 4294967295.0f
+
+// 3.0 is 99.99% coverage, 2.0 is 95% coverage
+#define GS_COVARIANCE_STDDEV 2.0f
 
 // 2.0f would be full res, 1.5f is typically "good enough"
 #define GS_QUAD_SIZE_BASE 1.9f
@@ -106,6 +110,8 @@
 constexpr uint32_t GS_MAX_NUM_GS_OBJECTS { 4u };
 constexpr uint32_t GS_MAX_NUM_GS_TEXTURES { 60u };  // should be 15 * GS_MAX_NUM_GS_OBJECTS
 constexpr uint32_t GS_FULL_HARMONICS_HEADER_SIZE { 62u };
+constexpr uint32_t GS_FULL_HARMONICS_FILTER_HEADER_SIZE { 63u }; // +filter_3D (Moblie3DGS3 format)
+constexpr uint32_t GS_FULL_HARMONICS_FILTER_SR_HEADER_SIZE { 66u }; // +filter_3D + sr_params_0/1/2 (lightweight SR)
 constexpr uint32_t GS_RESTRICTED_HARMONICS_HEADER_SIZE { 17u };
 constexpr uint32_t GS_RESTRICTED_HARMONICS_HEADER_SIZE_MINIMAL { 14u };
 constexpr uint32_t GS_PACKED_HEADER_SIZE { 4u };
@@ -118,6 +124,8 @@ constexpr uint32_t GS_PRE_SUM_TGS { 128u };
 constexpr uint32_t GS_PROCESS_DATA_TGS { 64u };
 constexpr uint32_t GS_DENSE_OBJECT_TGS { 64u };
 constexpr uint32_t GS_DEPTH_TGS { 64u };
+
+constexpr uint32_t GS_T3H_TGS { 64u };
 
 constexpr uint32_t GS_DEPTH_APPLY_XY_TGS { 16u };
 
@@ -175,6 +183,10 @@ constexpr uint32_t GS_SH_MIN_COMP_PER_FRAME { 50000u };
 // 4096x4096 is good until 16777216 gaussians in the scene
 constexpr uint32_t GS_DATA_STORE_TEX_SIZE { 4096u };
 
+constexpr uint32_t GS_FRAME_BUFFER_SIZE_SCALE1 { 4096u };
+constexpr uint32_t GS_FRAME_BUFFER_SIZE_SCALE2 { 2048u };
+constexpr uint32_t GS_FRAME_BUFFER_SIZE_SCALE4 { 1024u };
+
 constexpr float GS_FADE_MAX_WAIT_POINT_SECONDS { 4.0f };
 constexpr float GS_FADE_RATE_EXPONENT { 2.0f };
 
@@ -192,5 +204,27 @@ constexpr uint32_t MOIRE_MITIGATED_RENDER_HASH_0 { 0x85EBCA6Bu };
 constexpr uint32_t MOIRE_MITIGATED_RENDER_HASH_1 { 0xC2B2AE35u };
 constexpr float GS_MAX_SPLAT_EXTENT { 3.1622776f };
 #endif
+
+// Returns the frame buffer size for the given GS scale factor
+// Used by both C++ render node code and the lightweight SR pipeline
+#ifdef VULKAN
+uint GetGsFrameBuffeSize(const unit gsScaleFactor)
+#else
+static inline uint32_t GetGsFrameBuffeSize(const uint32_t gsScaleFactor)
+#endif
+{
+    switch (gsScaleFactor) {
+        case 1:
+            return GS_FRAME_BUFFER_SIZE_SCALE1;
+        case 2:
+            return GS_FRAME_BUFFER_SIZE_SCALE2;
+        case 3:
+            return GS_FRAME_BUFFER_SIZE_SCALE2;
+        case 4:
+            return GS_FRAME_BUFFER_SIZE_SCALE4;
+        defualt:
+            return GS_FRAME_BUFFER_SIZE_SCALE4;
+    }
+}
 
 #endif // SHADERS__COMMON__GS_COMMON_H
