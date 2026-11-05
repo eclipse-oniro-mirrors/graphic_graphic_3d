@@ -54,6 +54,14 @@ config("gs_api") {
     "-Wno-unused-but-set-variable",
     "-Wno-overloaded-virtual",
   ]
+
+  if (ohos_indep_compiler_enable) {
+    # binarys/ ships prebuilt googletest as bitcode whose EnableSplitLTOUnit
+    # module flag does not match ours, and lld aborts when the two modules are
+    # imported into the same link. Keep these objects native in the independent
+    # build so they take no part in that comparison.
+    cflags -= [ "-flto=thin" ]
+  }
 }
 
 config("gs_config") {
