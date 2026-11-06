@@ -1419,7 +1419,7 @@ BASE_NS::string ExtractSceneName(BASE_NS::string_view gsPath)
         filename = filename.substr(0, dotPos);
     }
     BASE_NS::string name(filename);
-    auto usPos = name.find_last_of('_');
+    const auto usPos = name.find_last_of('_');
     if (usPos != BASE_NS::string_view::npos && usPos > 0) {
         BASE_NS::string_view suffix = BASE_NS::string_view(name).substr(usPos + 1);
         if (suffix == "50w" || suffix == "100w" || suffix == "200w" || suffix == "sr") {
@@ -1475,7 +1475,7 @@ bool ReadSrKernelMetadata(IFileManager& fileManager, BASE_NS::string_view uri, B
     meta.srScale = srScaleVal ? srScaleVal->as_number<uint32_t>() : 4u;
     meta.bilinearResidual = bilinResVal ? bilinResVal->as_number<bool>() : true;
     meta.kernelBinName = (kernelBinVal && kernelBinVal->is_string())
-        ? BASE_NS::string(kernelBinVal->string_.data(), kernelBinVal->string_.size()
+        ? BASE_NS::string(kernelBinVal->string_.data(), kernelBinVal->string_.size())
         : ("gs3d_sr_kernel_" + BASE_NS::string(sceneName) + ".bin");
     return true;
 }

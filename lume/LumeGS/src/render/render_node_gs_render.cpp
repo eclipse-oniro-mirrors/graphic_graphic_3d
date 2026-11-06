@@ -1592,12 +1592,12 @@ void RenderNodeGsRender::PreExecuteFrame()
         gsHandlesCache_.gaussianRenderTargetDepth = renderData->gaussianRenderTargetDepth1;
         gsHandlesCache_.depthStoreCacheHandle = renderData->depthStoreCacheHandle;
 
+        gsHandlesCache_.gaussianRenderTargetStatusUbo = renderData->gaussianRenderTargetStatusUbo;
+
         gsHandlesCache_.srParamsHandle = renderData->srParamsHandle;
         gsHandlesCache_.foldedKernelHandle = renderData->foldedKernelHandle;
         gsHandlesCache_.attrsTargetHandle = renderData->attrsTargetHandle;
         gsHandlesCache_.lrColorTargetHandle = renderData->lrColorTargetHandle;
-
-        gsHandlesCache_.gaussianRenderTargetStatusUbo = renderData->gaussianRenderTargetStatusUbo;
 
         gsHandlesCache_.customAnimationShader = renderData->customAnimationShader;
         gsHandlesCache_.customAnimationResources = renderData->customAnimationResources;
@@ -2092,7 +2092,7 @@ void RenderNodeGsRender::ExecuteFrame(RENDER_NS::IRenderCommandList& cmdList)
             ExecuteLightweightSr(cmdList, renderData);
         } else {
             if (dataStore_->IsLightweightSrActive() && renderData->isTiled && !lightweightSrTiledWarnLogged_) {
-                CORE_LOG_W("RenderNodeGsRender: lightweight SR is active but the scene is tiled"
+                CORE_LOG_W("RenderNodeGsRender: lightweight SR is active but the scene is tiled "
                 "(tiled mode not supported); falling back to the normal render path");
                 lightweightSrTiledWarnLogged_ = true;
             }
@@ -3802,7 +3802,7 @@ void RenderNodeGsRender::ExecuteGaussianRenderPassLightweight(RENDER_NS::IRender
     const Math::Mat4X4 viewMatrix, GS::GsRenderData* renderData, const bool isCpuSortDone)
 {
     if (renderData->srScale == 0u) {
-        CORE_LOG_E("ExecuteGaussianRenderPaddLightweight: srScale is 0, skipping LR render pass.");
+        CORE_LOG_E("ExecuteGaussianRenderPassLightweight: srScale is 0, skipping LR render pass.");
         return;
     }
 
@@ -3955,7 +3955,7 @@ void RenderNodeGsRender::ExecuteLightweightSr(
     const uint32_t tgcX = (width / GS_T3H_TGS) + (width % GS_T3H_TGS > 0 ? 1 : 0);
     const uint32_t tgcY = (height / GS_T3H_TGS) + (height % GS_T3H_TGS > 0 ? 1 : 0);
 
-    cmdList.Dispatch(tgcX, tgcY, 1u);
+    cmdList.Dispatch(tgcX, tgcY, 1);
 }
 
 // for plugin / factory interface

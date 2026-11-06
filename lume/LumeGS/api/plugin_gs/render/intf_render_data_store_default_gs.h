@@ -378,16 +378,16 @@ struct GsRenderData {
     RENDER_NS::RenderHandleReference lrColorTargetHandle; // RGBA8 LR
 
     // YUV -> RGB calibration matrix loaded from gs3d_t3h_clib_<scene>.bin
-    RENDER_NS::Math::Vec4 calibMrow0 { 1.0f, 0.0f, 1.402f, -0.701f };
-    RENDER_NS::Math::Vec4 calibMrow1 { 1.0f, -0.344f, -0.714f, 0.529f };
-    RENDER_NS::Math::Vec4 calibMrow2 { 1.0f, 1.772f, 0.0f, -0.886f };
+    BASE_NS::Math::Vec4 calibMrow0 { 1.0f, 0.0f, 1.402f, -0.701f };
+    BASE_NS::Math::Vec4 calibMrow1 { 1.0f, -0.344f, -0.714f, 0.529f };
+    BASE_NS::Math::Vec4 calibMrow2 { 1.0f, 1.772f, 0.0f, -0.886f };
 
     // SR upscale factor: LR = HR / srScale.
     uint32_t srScale { 4u };
 
-    BASE_NS::RenderHandleReference srParamsHandle;
-    BASE_NS::RenderHandleReference foldedKernelHandle;
-    BASE_NS::RenderHandleReference attrsTargetHandle;
+    RENDER_NS::RenderHandleReference srParamsHandle;
+    RENDER_NS::RenderHandleReference foldedKernelHandle;
+    RENDER_NS::RenderHandleReference attrsTargetHandle;
 
     // Lightweight SR runtime parameters
     uint32_t srInChannels { 4u };
