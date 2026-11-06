@@ -112,7 +112,7 @@ struct PlyVertexDataWithFilterAndSrParams {
     float rotation[4];
     float filter_3D;
     float srParams[3];
-}
+};
 
 enum class PlyFormatType {
     Unknown = 0,

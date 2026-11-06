@@ -55,10 +55,10 @@ int GetGsObjectIndex(const uint elementId) {
 }
 
 const CORE_RELAXEDP vec2 VERTEX_POSITION[4] = vec2[] (
-    vec2(-1.0f, -1.0f);
-    vec2(1.0f, -1.0f);
-    vec2(1.0f, 1.0f);
-    vec2(-1.0f, 1.0f);
+    vec2(-1.0f, -1.0f),
+    vec2(1.0f, -1.0f),
+    vec2(1.0f, 1.0f),
+    vec2(-1.0f, 1.0f)
 );
 
 #define GS_SCALER(x) (x <= 0.5f ? (x * 0.5f + 0.75f) : (x <= 0.7f ? (x + 0.5f) : (x * 0.16666667f + 1.0833333f)))

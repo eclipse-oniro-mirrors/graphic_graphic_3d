@@ -241,7 +241,7 @@ struct GsObjectLoadData {
     BASE_NS::vector<GsSplatDataTilePacked> gsDataPacked;
 
     // Per-gaussian SR attributes.
-    BASE_NS::vector<BASE_NS::Math::Vec3> srParam;
+    BASE_NS::vector<BASE_NS::Math::Vec3> srParams;
 
     // these will be moved to GsRenderData
     BASE_NS::vector<BASE_NS::Math::Vec4> gaussianPositions;
@@ -375,24 +375,24 @@ struct GsRenderData {
     bool isTiled { false };
 
     // SR low-resolution (LR) base-rednering resources
-    RENDER_NS::RenderHanleReference lrColorTargetHandle; // RGBA8 LR
+    RENDER_NS::RenderHandleReference lrColorTargetHandle; // RGBA8 LR
 
     // YUV -> RGB calibration matrix loaded from gs3d_t3h_clib_<scene>.bin
-    RENDER_NS::Math::Vec calibMrow0 { 1.0f, 0.0f, 1.402f, -0.701f };
-    RENDER_NS::Math::Vec calibMrow1 { 1.0f, -0.344f, -0.714f, 0.529f };
-    RENDER_NS::Math::Vec calibMrow2 { 1.0f, 1.772f, 0.0f, -0.886f };
+    RENDER_NS::Math::Vec4 calibMrow0 { 1.0f, 0.0f, 1.402f, -0.701f };
+    RENDER_NS::Math::Vec4 calibMrow1 { 1.0f, -0.344f, -0.714f, 0.529f };
+    RENDER_NS::Math::Vec4 calibMrow2 { 1.0f, 1.772f, 0.0f, -0.886f };
 
     // SR upscale factor: LR = HR / srScale.
-    unit32_t srScale { 4u };
+    uint32_t srScale { 4u };
 
-    RENDER_NS::RenderHandleReference srParamHanle;
-    RENDER_NS::RenderHandleReference foldedKernelHanle;
+    RENDER_NS::RenderHandleReference srParamHandle;
+    RENDER_NS::RenderHandleReference foldedKernelHandle;
     RENDER_NS::RenderHandleReference attrsTargetHandls;
 
     // Lightweight SR runtime parameters
     uint32_t srInChannels { 4u };
     uint32_t srKernelSize { 1u };
-    bool lightweightSrEnables { false };
+    bool lightweightSrEnabled { false };
     bool srParamsLoaded { false };
     bool foldedKernelLoaded { false };
 

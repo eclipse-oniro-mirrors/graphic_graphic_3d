@@ -130,8 +130,8 @@ public:
     void ExecuteGaussianDebugDrawRenderPass(RENDER_NS::IRenderCommandList& cmdList, GS::GsRenderData* renderData);
 
     // Lightweight SR LR render pass: render gaussin at LR into 2 MRT attachments.
-    void ExcuteGaussianRenderPassLightweight(RENDER_NS::IRenderCommandList& cmdList,
-        const Math::Mat4X4 viewMatrix, GS::GsRenderData* renderData, const bool isCpuSortDone);
+    void ExecuteGaussianRenderPassLightweight(RENDER_NS::IRenderCommandList& cmdList,
+        const BASE_NS::Math::Mat4X4 viewMatrix, GS::GsRenderData* renderData, const bool isCpuSortDone);
     // Lightweight sr compute pass folded-convolution + bilinear residual +
     // UV bilinear + YUV->RGB. Single dispatch weites final RGBA to HR target.
     void ExecuteLightweightSr(RENDER_NS::IRenderCommandList& cmdList, GS::GsRenderData* renderData);

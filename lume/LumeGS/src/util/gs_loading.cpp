@@ -1167,8 +1167,8 @@ GS::GsPrimitive GS::LoadGaussianData(const BASE_NS::string& gsPath, GS::GsRender
         const uint32_t srByteSize = static_cast<uint32_t>(loadData.srParams.size()) * sizeof(BASE_NS::Math::Vec3);
         BASE_NS::array_view<const uint8_t> srDataView(
             reinterpret_cast<const uint8_t*>(loadData.srParams.data()), srByteSize);
-        renderData->srParamsHandle = CreateGsBuffer(gpuResourceMgr,
-            BASE_NS::string("GS3DsrParams_") + BASE_NS::string(loadCtx.uniqueName),
+        renderData->srParamsHandle = CreateGSBuffer(gpuResourceMgr,
+            BASE_NS::string("GS3DSrParams_") + BASE_NS::string(loadCtx.uniqueName),
             srByteSize, srDataView,
             BufferUsageFlagBits::CORE_BUFFER_USAGE_STORAGE_BUFFER_BIT |
             BufferUsageFlagBits::CORE_BUFFER_USAGE_TRANSFER_DST_BIT,

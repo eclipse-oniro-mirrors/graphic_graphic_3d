@@ -172,7 +172,7 @@ void RenderNodeGsRender::InitNode(IRenderNodeContextManager& renderNodeContextMg
         inputRenderPass.subpassIndex = 0;
         inputRenderPass.colorAttachmentIndices.push_back(0);
         inputRenderPass.colorAttachmentIndices.push_back(1);
-        gsRenderLightweightPass_ = renderNodeUtil.CreateRenderPass(inputRenderPass);
+        gsRenderLrLightweightPass_ = renderNodeUtil.CreateRenderPass(inputRenderPass);
     }
 
     // construct the depth variant render pass
@@ -1531,7 +1531,7 @@ void RenderNodeGsRender::PreExecuteFrame()
             shaderMgr.GetShaderHandle("gsshaders://shader/gs3d_gaussian_splatting_render_depth.shader");
         gsRenderLrLightweightHandle_ = shaderMgr.GetShaderHandle(
             "gsshaders://shader/gs3d_gaussian_splatting_render_lr_lightweight.shader");
-        gsRendershaders_.lightweightSr =
+        gsRenderShaders_.lightweightSr =
             shaderMgr.GetShaderHandle("gsshaders://computeshader/gs3d_lightweight_sr.shader");
         firstLoad = false;
     }
@@ -2086,12 +2086,12 @@ void RenderNodeGsRender::ExecuteFrame(RENDER_NS::IRenderCommandList& cmdList)
             gsFramePrecomputed = true;
         }
 
-        if (datastore_->IsLightweightSrActive() && !renderData->isTiled) {
+        if (dataStore_->IsLightweightSrActive() && !renderData->isTiled) {
             // Lightweight SR path: LR render (color + attrs) -> folded-convolution SR compute
             ExecuteGaussianRenderPassLightweight(cmdList, cameraViewMatrix_, renderData, cpuSortFinished);
             ExecuteLightweightSr(cmdList, renderData);
         } else {
-            if (datastore_->IsLightweightSrActive() && renderData->isTiled && !lightweightSrTiledWarnLogged_) {
+            if (dataStore_->IsLightweightSrActive() && renderData->isTiled && !lightweightSrTiledWarnLogged_) {
                 CORE_LOG_W("RenderNodeGsRender: lightweight SR is active but the scene is tiled"
                 "(tiled mode not supported); falling back to the normal render path");
                 lightweightSrTiledWarnLogged_ = true;
@@ -2184,7 +2184,9 @@ void RenderNodeGsRender::PrecomputeGsFrameData(RENDER_NS::IRenderCommandList& cm
 
     GsRenderPushConstantStruct pc {};
  
-    const float renderScale = static_cast<float>(dataStore_->GetRenderScaleFactor());
+    const float renderScale = static_cast<float>(dataStore_->IsLightweightSrActive())
+        : 1.0f
+        ? static_cast<float>(dataStore_->GetRenderScaleFactor());
     pc.viewportSize.x = static_cast<float>(scissorDesc_.extentWidth) / renderScale;
     pc.viewportSize.y = static_cast<float>(scissorDesc_.extentHeight) / renderScale;
     // When XEG upscale is enabled, no subpixel jittering is needed (jitterIndex = 0)
@@ -2431,7 +2433,9 @@ bool RenderNodeGsRender::SetGsColorAttachment(RENDER_NS::RenderPass& activeRende
 void RenderNodeGsRender::PrepareGsViewportAndScissor(RENDER_NS::RenderPass& activeRenderPass,
     RENDER_NS::ViewportDesc& viewportDesc, RENDER_NS::ScissorDesc& scissorDesc) const
 {
-    const float scaleFactor = dataStore_->GetRenderScaleFactor();
+    const float scaleFactor = dataStore_->IsLightweightSrActive()
+        ? 1.0f
+        : dataStore_->GetRenderScaleFactor();
     viewportDesc = viewportDesc_;
     viewportDesc.height = ceil(viewportDesc.height / scaleFactor);
     viewportDesc.width = ceil(viewportDesc.width / scaleFactor);
@@ -2553,7 +2557,9 @@ void RenderNodeGsRender::ExecuteGaussianRenderPass(RENDER_NS::IRenderCommandList
     pc.viewportSize.y = static_cast<float>(scissorDesc.extentHeight);
     pc.jitterIndex = Math::clamp(jitterRendered_, 0u, 4u);
     pc.numGsObjects = static_cast<uint32_t>(dataStore_->GetGsPrimitives().size());
-    pc.renderScaleFactor = dataStore_->GetRenderScaleFactor();
+    pc.renderScaleFactor = dataStore_->IsLightweightSrActive()
+        ? 1.0f
+        : dataStore_->GetRenderScaleFactor();
     pc.covarianceStddev = dataStore_->GetRenderCovarianceStddev();
     pc.adhocCullingScale = 1.2f;
     pc.enableGsOpt = renderData->enableGsOpt;
@@ -3807,18 +3813,18 @@ void RenderNodeGsRender::ExecuteGaussianRenderPassLightweight(RENDER_NS::IRender
     const uint32_t lrH = hrH / renderData->srScale;
 
     // Attachment 0: LR color target
-    gsRenderLrLightweightPass_.renderPassDesc.attachmentHandles[0] = gsHandlesCache__.lrColorTargetHandle.GetHandle();
+    gsRenderLrLightweightPass_.renderPassDesc.attachmentHandles[0] = gsHandlesCache_.lrColorTargetHandle.GetHandle();
     // Attachment 1: alpha-blended SR attributes (RGBS16F, LR)
-    gsRenderLrLightweightPass_.renderPassDesc.attachmentHandles[1] = gsHandlesCache__.attrsTargetHandle.GetHandle();
+    gsRenderLrLightweightPass_.renderPassDesc.attachmentHandles[1] = gsHandlesCache_.attrsTargetHandle.GetHandle();
 
     const uint32_t numGs = dataStore_->GetNumActiveGs();
     const ViewportDesc viewportDesc { 0.f, 0.f, static_cast<float>(lrW), static_cast<float>(lrH), 0.f, 1.f};
     const ScissorDesc scissorDesc { 0u, 0u, lrW, lrH };
 
     gsRenderLrLightweightPass_.renderPassDesc.renderArea.extentWidth = lrW;
-    gsRenderLrLightweightPass_.renderPassDesc.renderArea.extenHeight = lrH;
+    gsRenderLrLightweightPass_.renderPassDesc.renderArea.extentHeight = lrH;
 
-    cmdList.BeginRenderPass(gsRenderLrLightweightPass_.renderpassDesc, gsRenderLrLightweightPass_.subpassStartIndex,
+    cmdList.BeginRenderPass(gsRenderLrLightweightPass_.renderPassDesc, gsRenderLrLightweightPass_.subpassStartIndex,
         gsRenderLrLightweightPass_.subpassDesc);
 
     cmdList.SetDynamicStateScissor(scissorDesc);
@@ -3828,7 +3834,7 @@ void RenderNodeGsRender::ExecuteGaussianRenderPassLightweight(RENDER_NS::IRender
     cmdList.BindPipeline(psoData.psoHandle);
 
     VertexBuffer vb;
-    vb.bufferhandle = gsHandlesCache_dataStorageCacheHandle.GetHandle();
+    vb.bufferHandle = gsHandlesCache_.dataStorageCacheHandle.GetHandle();
     vb.byteSize = numGs * sizeof(Math::UVec4);
 
     cmdList.BindVertexBuffers({ vb });
@@ -3837,10 +3843,10 @@ void RenderNodeGsRender::ExecuteGaussianRenderPassLightweight(RENDER_NS::IRender
     gsRenderLrLightweightSet0_->BindBuffer(1u, gsDynamicDataUniformBufferHandle_.GetHandle(), 0);
     gsRenderLrLightweightSet0_->BindBuffer(2u, gsHandlesCache_.srParamsHandle.GetHandle(), 0);
     gsRenderLrLightweightSet0_->BindBuffer(3u,
-        indexPingPong_ ? gsHandlesCache_.gsIndicesRef2.GetHandle() : gsHandlesCache_.gsIndicesRef.GetHandle(), 0);\
+        indexPingPong_ ? gsHandlesCache_.gsIndicesRef2.GetHandle() : gsHandlesCache_.gsIndicesRef.GetHandle(), 0);
     
     const auto& set0Handle = gsRenderLrLightweightSet0_->GetDescriptorSetHandle();
-    cmdList.UpdateDescriptorSet(set0Handle, gsRenderLrLightweightSet0_->GetDescriptorSetLayoutBindResources());
+    cmdList.UpdateDescriptorSet(set0Handle, gsRenderLrLightweightSet0_->GetDescriptorSetLayoutBindingResources());
     cmdList.BindDescriptorSet(0, set0Handle);
 
     GsRenderPushConstantStruct pc {};
@@ -3864,9 +3870,9 @@ void RenderNodeGsRender::BindLightweightSrDescriptorSet(RENDER_NS::IRenderComman
 {
     auto& bind = bindersGsRender_.lightweightSr;
 
-    bind.set0->BindImage(0u, gsHandlesCache__.attrsTargetHandle.GetHandle());
-    bind.set0->BindImage(1u, gsHandlesCache__.lrColorTargetHandle.GetHandle());
-    bind.set0->BindBuffer(2u, gsHandlesCache__.foldedKernelHandle.GetHandle(), 0);
+    bind.set0->BindImage(0u, gsHandlesCache_.attrsTargetHandle.GetHandle());
+    bind.set0->BindImage(1u, gsHandlesCache_.lrColorTargetHandle.GetHandle());
+    bind.set0->BindBuffer(2u, gsHandlesCache_.foldedKernelHandle.GetHandle(), 0);
     bind.set0->BindImage(3u, GetJitteredGaussianRenderTarget());
 
     const auto& set0Handle = bind.set0->GetDescriptorSetHandle();
@@ -3936,8 +3942,8 @@ void RenderNodeGsRender::ExecuteLightweightSr(
     pc.viewportSize.y = static_cast<float>(height);
     pc.jitterIndex = Math::clamp(jitterRendered_, 0u, 4u);
     pc.gsScaleFactor = dataStore_->GetGsScaleFactor();
-    pc.srInChannels = renderData_->srInChannels;
-    pc.kernelSize = renderData_->srkernelSize;
+    pc.srInChannels = renderData_>srInChannels;
+    pc.kernelSize = renderData->srkernelSize;
     pc.bilinearResidual = 1u;
     pc.padAlign = 0u;
     pc.Mrow0 = renderData->calibMrow0;

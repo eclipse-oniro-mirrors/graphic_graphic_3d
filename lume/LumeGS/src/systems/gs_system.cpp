@@ -133,8 +133,8 @@ public:
 
     // IGsSystem -- Lightweight SR (Direct Attribute Rendering) pipeline.
     bool LoadFoldedKernel(BASE_NS::string_view uri, BASE_NS::string_view sceneName,
-        Gs:GsRenderData* renderData) override;
-    bool LoadT3HCalib(BASE_NS::string_view sceneName, Gs:GsRenderData* renderData) override;
+        GS::GsRenderData* renderData) override;
+    bool LoadT3hCalib(BASE_NS::string_view sceneName, GS:GsRenderData* renderData) override;
 
 private:
     void BuildCpuRaycastAccelerationStructure() const;
@@ -149,7 +149,7 @@ private:
     void UpdateConfigurationData();
 
     // Auto-loads lightweight SR kernel + calibration when enableSr is true.
-    void TryAutoLoadSrData(const GsComponent& dfc, Gs:GsRenderData* renderData);
+    void TryAutoLoadSrData(const GsComponent& dfc, GS:GsRenderData* renderData);
 
     GS::GsLoadContext GetLoadContext();
 
@@ -879,12 +879,12 @@ bool GsSystem::Update(bool frameRenderingQueued, uint64_t time, uint64_t delta)
             // With lightweight SR active the targets are created at full
             // resolution (gsScaleFactor skipped, see CreateGsRenderImages).
             const float upscaleFactor = dataStoreGs_->GetXegUpscaleFactor();
-            const Math::UVec2 exceptedRt05Size(static_cast<uint32_t>(celi(renderResolutionFromCC_.x / upscaleFactor)),
+            const Math::UVec2 expectedRt0Size(static_cast<uint32_t>(celi(renderResolutionFromCC_.x / upscaleFactor)),
                 static_cast<uint32_t>(celi(renderResolutionFromCC_.y / upscaleFactor)));
             const GpuImageDesc rt0Desc = renderContext_->GetDevice()
                                             .GetGpuResourceManager()
                                             .GetImageDescriptor(renderData->gaussianRenderTarget0);
-            rt0SizeMismatch = (rt0Desc.width != exceptedRt0Size.x) || (rt0Desc.height != exceptedRt0Size.y);
+            rt0SizeMismatch = (rt0Desc.width != expectedRt0Size.x) || (rt0Desc.height != expectedRt0Size.y);
         }
         if (lrTargetMissing || rt0SizeMismatch) {
             CORE_LOG_I("GsSystem: lightweight SR active but render targets out of sync, recreating");
@@ -1448,7 +1448,7 @@ bool ReadSrKernelMetadata(IFileManager& fileManager, BASE_NS::string_view uri, B
         return false;
     }
     const uint64_t jsonLen = jsonFile->GetLength();
-    BASE_NS::vector<char> jsonBuf(static_cast<size_t>(jsonLen + 1u, '\0');
+    BASE_NS::vector<char> jsonBuf(static_cast<size_t>(jsonLen) + 1u, '\0');
     if (jsonFile->Read(jsonBuf.data(), jsonLen) != jsonLen) {
         CORE_LOG_E("LoadFoldedKernel: failed to read JSON file");
         return false;
@@ -1475,7 +1475,7 @@ bool ReadSrKernelMetadata(IFileManager& fileManager, BASE_NS::string_view uri, B
     meta.srScale = srScaleVal ? srScaleVal->as_number<uint32_t>() : 4u;
     meta.bilinearResidual = bilinResVal ? bilinResVal->as_number<bool>() : true;
     meta.kernelBinName = (kernelBinVal && kernelBinVal->is_string())
-        ? BASE_NS::string(kernelBinVal->string_data(), kernelBinVal->string_.size()
+        ? BASE_NS::string(kernelBinVal->string_.data(), kernelBinVal->string_.size()
         : ("gs3d_sr_kernel_" + BASE_NS::string(sceneName) + ".bin"));
     return true;
 }
@@ -1488,7 +1488,7 @@ bool ReadSrKernelBinary(IFileManager& fileManager, const SrKernelMetadata& meta,
     const BASE_NS::string kernelBinPath = "OhosRawFile://assets/" + meta.kernelBinName;
     auto kernelFile = fileManager.OpenFile(kernelBinPath);
     if (!kernelFile) {
-        CORE_LOG_E("LoadFoldedKernel: failed to open kernel bin '%s'" + meta.kernelBinName.c_str());
+        CORE_LOG_E("LoadFoldedKernel: failed to open kernel bin '%s'", meta.kernelBinName.c_str());
         return false;
     }
 
@@ -1542,7 +1542,7 @@ void GsSystem::TryAutoLoadSrData(const GsComponent& dfc, GS::GsRenderData* rende
     
     const BASE_NS::string sceneName = ExtractSceneName(dfc.gsPath);
     if (sceneName.empty()) {
-        CORE_LOG_W("TryAutoLoadSrData: cannot derive scene name form gsPath "%s"; SR disabled", dfc.gsPath.c_str());
+        CORE_LOG_W("TryAutoLoadSrData: cannot derive scene name from gsPath "%s"; SR disabled", dfc.gsPath.c_str());
         return;
     }
 
@@ -1563,32 +1563,32 @@ void GsSystem::TryAutoLoadSrData(const GsComponent& dfc, GS::GsRenderData* rende
         kernelOk ? "ok" : "fail");
 }
 
-void GsSystem::LoadT3HCalib(BASE_NS::string_view sceneName, Gs:GsRenderData* renderData)
+bool GsSystem::LoadT3hCalib(BASE_NS::string_view sceneName, GS::GsRenderData* renderData)
 {
     if (!renderContext_ || !dataStoreGs_) {
-        CORE_LOG_E("LoadT3HCalib: render context or GS data store not ready");
+        CORE_LOG_E("LoadT3hCalib: render context or GS data store not ready");
         return false;
     }
 
-    auto& filemanager = renderContext_->GetEngine().GetFileManager();
+    auto& fileManager = renderContext_->GetEngine().GetFileManager();
     const BASE_NS::string calibBinPath = "OhosRawFile://assets/gs3d_t3h_calib_" + BASE_NS::string(sceneName) + ".bin";
 
     auto calibFile = fileManager.OpenFile(calibBinPath);
     if (!calibFile) {
-        CORE_LOG_E("LoadT3HCalib: failed to open calib '%s'", calibBinPath.c_str());
+        CORE_LOG_E("LoadT3hCalib: failed to open calib '%s'", calibBinPath.c_str());
         return false;
     }
     const uint64_t calibLen = calibFile->GetLength();
     constexpr uint64_t expectedCalibLen = 48uLL;
     if (calibLen != expectedCalibLen) {
-        CORE_LOG_E("LoadT3HCalib: calib size mismatch (got=%llu, expected=%llu)",
+        CORE_LOG_E("LoadT3hCalib: calib size mismatch (got=%llu, expected=%llu)",
             static_cast<unsigned long long>(calibLen),
             static_cast<unsigned long long>(expectedCalibLen));
         return false;
     }
     float calibData[12];
     if (calibFile->Read(calibData, calibLen) != calibLen) {
-        CORE_LOG_E("LoadT3HCalib: failed to read calib bin");
+        CORE_LOG_E("LoadT3hCalib: failed to read calib bin");
         return false;
     }
     renderData->calibMrow0 = BASE_NS::Math::Vec4(calibData[0], calibData[1], calibData[2], calibData[9]);
@@ -1598,7 +1598,7 @@ void GsSystem::LoadT3HCalib(BASE_NS::string_view sceneName, Gs:GsRenderData* ren
 }
 
 bool GsSystem::LoadFoldedKernel(BASE_NS::string_view uri, BASE_NS::string_view sceneName,
-    Gs:GsRenderData* renderData)
+    GS::GsRenderData* renderData)
 {
     if (!renderContext_ || !dataStoreGs_) {
         CORE_LOG_E("LoadFoldedKernel: render context or GS data store not ready");

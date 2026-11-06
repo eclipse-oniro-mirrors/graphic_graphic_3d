@@ -42,7 +42,6 @@
                         "dstAlphaBlendFactor": "one_minus_src_alpha",
                         "alphaBlendOp": "add"
                     },
-                    "colorAttachments": [
                     {
                         "enableBlend": true,
                         "colorWriteMask": "r_bit|g_bit|b_bit|a_bit",

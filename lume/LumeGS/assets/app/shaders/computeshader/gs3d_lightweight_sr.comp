@@ -44,12 +44,12 @@ void main()
     int W = int(uPc.viewportSize.x);
     int H = int(uPc.viewportSize.y);
 
-    int gxg = int(gl_WorkGroupId.x) * WG;    
-    int gyg = int(gl_WorkGroupId.y) * WG;
+    int gxg = int(gl_WorkGroupID.x) * WG;    
+    int gyg = int(gl_WorkGroupID.y) * WG;
     int li = int(gl_LocalInvocationIndex);
 
     // ---- Cooperative Y + UV + A tileload: halo of 1 pixel on each side ----
-    for (int idx = li; idx < TW * TH; IDX += WG * WG) {
+    for (int idx = li; idx < TW * TH; idx += WG * WG) {
         int sy = idx / TW;        
         int sx = idx % TW;
         int lxClamp = clamp(gxg + sx - 1, 0, W - 1);        

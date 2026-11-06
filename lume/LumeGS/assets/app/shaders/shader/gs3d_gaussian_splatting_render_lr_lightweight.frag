@@ -34,4 +34,3 @@ void main()
     outColor = vec4(alpha * color.rgb, alpha);
     outAttrs = vec4(alpha * vSrParams, alpha);
 }
-

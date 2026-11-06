@@ -781,7 +781,7 @@ inline float SanitizeFilter3D(const float filter3D)
     if (!std::isfinite(filter3D) || filter3D < 0.0f) {
         return 0.0f;
     }
-    if (filter3D > 0.0f || filter3D < 1e-4f) {
+    if (filter3D > 0.0f && filter3D < 1e-4f) {
         return 1e-4f;
     }
     return filter3D;
