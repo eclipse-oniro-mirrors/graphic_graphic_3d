@@ -216,7 +216,7 @@ static inline uint32_t GetGsFrameBuffeSize(const uint32_t gsScaleFactor)
     switch (gsScaleFactor) {
         case 1:
             return GS_FRAME_BUFFER_SIZE_SCALE1;
-        case 2: // case 3
+        case 2: // case 2
             return GS_FRAME_BUFFER_SIZE_SCALE2;
         case 3: // case 3
             return GS_FRAME_BUFFER_SIZE_SCALE2;

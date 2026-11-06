@@ -1525,7 +1525,7 @@ bool CreateSrKernelSsbo(RENDER_NS::IRenderContext& renderContext, BASE_NS::strin
 
     outHandle = gpuResourceMgr.Create(
         BASE_NS::string("GS3DFoldedKernel_") + BASE_NS::string(sceneName), kernelDesc, kernelData);
-    
+
     if (!RENDER_NS::RenderHandleUtil::IsValid(outHandle.GetHandle())) {
         CORE_LOG_E("LoadFoldedKernel: failed to create SSBO");
         return false;
