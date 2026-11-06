@@ -182,9 +182,11 @@ template("lume_compile_shader") {
       "--input-root",
       invoker.asset_path,
       "--input-root",
-      rebase_path("//foundation/graphic/graphic_3d/lume/LumeRender/api", root_build_dir),
+      rebase_path("//foundation/graphic/graphic_3d/lume/LumeRender/api",
+                  root_build_dir),
       "--input-root",
-      rebase_path("//foundation/graphic/graphic_3d/lume/Lume_3D/api", root_build_dir),
+      rebase_path("//foundation/graphic/graphic_3d/lume/Lume_3D/api",
+                  root_build_dir),
       "--",
       rebase_path(invoker.script, root_build_dir),
       rebase_path(invoker.dest_gen_path, root_build_dir),
@@ -203,4 +205,3 @@ template("lume_compile_shader") {
     }
   }
 }
-
