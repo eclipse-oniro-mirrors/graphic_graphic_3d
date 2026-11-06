@@ -134,7 +134,7 @@ public:
     // IGsSystem -- Lightweight SR (Direct Attribute Rendering) pipeline.
     bool LoadFoldedKernel(BASE_NS::string_view uri, BASE_NS::string_view sceneName,
         GS::GsRenderData* renderData) override;
-    bool LoadT3hCalib(BASE_NS::string_view sceneName, GS:GsRenderData* renderData) override;
+    bool LoadT3hCalib(BASE_NS::string_view sceneName, GS::GsRenderData* renderData) override;
 
 private:
     void BuildCpuRaycastAccelerationStructure() const;
@@ -149,7 +149,7 @@ private:
     void UpdateConfigurationData();
 
     // Auto-loads lightweight SR kernel + calibration when enableSr is true.
-    void TryAutoLoadSrData(const GsComponent& dfc, GS:GsRenderData* renderData);
+    void TryAutoLoadSrData(const GsComponent& dfc, GS::GsRenderData* renderData);
 
     GS::GsLoadContext GetLoadContext();
 
@@ -871,22 +871,22 @@ bool GsSystem::Update(bool frameRenderingQueued, uint64_t time, uint64_t delta)
     // Lightweight SR activation vs. render target state re-sync.
     if (renderData && dataStoreGs_->IsLightweightSrActive() &&
         dataStoreGs_->GetGsScaleFactor() != 0xFFFFffffu && EntityUtil::IsValid(renderTargetHostEntity_)) {
-        const bool lrTargetMissing =
+        const bool lrTargetsMissing =
             !RENDER_NS::RenderHandleUtil::IsValid(renderData->lrColorTargetHandle.GetHandle()) ||
             !RENDER_NS::RenderHandleUtil::IsValid(renderData->attrsTargetHandle.GetHandle());
         bool rt0SizeMismatch = false;
-        if (!lrTargetMissing) {
+        if (!lrTargetsMissing) {
             // With lightweight SR active the targets are created at full
             // resolution (gsScaleFactor skipped, see CreateGsRenderImages).
             const float upscaleFactor = dataStoreGs_->GetXegUpscaleFactor();
-            const Math::UVec2 expectedRt0Size(static_cast<uint32_t>(celi(renderResolutionFromCC_.x / upscaleFactor)),
-                static_cast<uint32_t>(celi(renderResolutionFromCC_.y / upscaleFactor)));
+            const Math::UVec2 expectedRt0Size(static_cast<uint32_t>(ceil(renderResolutionFromCC_.x / upscaleFactor)),
+                static_cast<uint32_t>(ceil(renderResolutionFromCC_.y / upscaleFactor)));
             const GpuImageDesc rt0Desc = renderContext_->GetDevice()
                                             .GetGpuResourceManager()
                                             .GetImageDescriptor(renderData->gaussianRenderTarget0);
             rt0SizeMismatch = (rt0Desc.width != expectedRt0Size.x) || (rt0Desc.height != expectedRt0Size.y);
         }
-        if (lrTargetMissing || rt0SizeMismatch) {
+        if (lrTargetsMissing || rt0SizeMismatch) {
             CORE_LOG_I("GsSystem: lightweight SR active but render targets out of sync, recreating");
             RemoveGsRenderTargets(renderData, renderTargetHostEntity_, loadCtx);
             GS::CreateGsRenderTargets(renderData, renderTargetHostEntity_, loadCtx, renderResolutionFromCC_, true);
@@ -1419,10 +1419,10 @@ BASE_NS::string ExtractSceneName(BASE_NS::string_view gsPath)
         filename = filename.substr(0, dotPos);
     }
     BASE_NS::string name(filename);
-    auto usPos = filename.find_last_of('_');
+    auto usPos = name.find_last_of('_');
     if (usPos != BASE_NS::string_view::npos && usPos > 0) {
-        BASE_NS::string_view suffx = BASE_NS::string_view(name).substr(usPos + 1);
-        if (suffx == "50w" || suffx == "100w" || suffx == "200w" || suffx == "sr") {
+        BASE_NS::string_view suffix = BASE_NS::string_view(name).substr(usPos + 1);
+        if (suffix == "50w" || suffix == "100w" || suffix == "200w" || suffix == "sr") {
             name = name.substr(0, usPos);
         }
     }
@@ -1476,7 +1476,7 @@ bool ReadSrKernelMetadata(IFileManager& fileManager, BASE_NS::string_view uri, B
     meta.bilinearResidual = bilinResVal ? bilinResVal->as_number<bool>() : true;
     meta.kernelBinName = (kernelBinVal && kernelBinVal->is_string())
         ? BASE_NS::string(kernelBinVal->string_.data(), kernelBinVal->string_.size()
-        : ("gs3d_sr_kernel_" + BASE_NS::string(sceneName) + ".bin"));
+        : ("gs3d_sr_kernel_" + BASE_NS::string(sceneName) + ".bin");
     return true;
 }
 
@@ -1488,7 +1488,7 @@ bool ReadSrKernelBinary(IFileManager& fileManager, const SrKernelMetadata& meta,
     const BASE_NS::string kernelBinPath = "OhosRawFile://assets/" + meta.kernelBinName;
     auto kernelFile = fileManager.OpenFile(kernelBinPath);
     if (!kernelFile) {
-        CORE_LOG_E("LoadFoldedKernel: failed to open kernel bin '%s'", meta.kernelBinName.c_str());
+        CORE_LOG_E("LoadFoldedKernel: failed to open kernel bin '%s'", kernelBinPath.c_str());
         return false;
     }
 
@@ -1542,7 +1542,7 @@ void GsSystem::TryAutoLoadSrData(const GsComponent& dfc, GS::GsRenderData* rende
     
     const BASE_NS::string sceneName = ExtractSceneName(dfc.gsPath);
     if (sceneName.empty()) {
-        CORE_LOG_W("TryAutoLoadSrData: cannot derive scene name from gsPath "%s"; SR disabled", dfc.gsPath.c_str());
+        CORE_LOG_W("TryAutoLoadSrData: cannot derive scene name from gsPath '%s'; SR disabled", dfc.gsPath.c_str());
         return;
     }
 
@@ -1557,7 +1557,7 @@ void GsSystem::TryAutoLoadSrData(const GsComponent& dfc, GS::GsRenderData* rende
         return;
     }
 
-    CORE_LOG_W("TryAutoLoadSrData: lightweight SR failed (scene=%s, params=%s, kernels=%s)",
+    CORE_LOG_W("TryAutoLoadSrData: lightweight SR failed (scene=%s, params=%s, kernel=%s)",
         sceneName.c_str(),
         renderData->srParamsLoaded ? "ok" : "fail",
         kernelOk ? "ok" : "fail");

@@ -208,9 +208,9 @@ constexpr float GS_MAX_SPLAT_EXTENT { 3.1622776f };
 // Returns the frame buffer size for the given GS scale factor
 // Used by both C++ render node code and the lightweight SR pipeline
 #ifdef VULKAN
-uint GetGSFrameBuffeSize(const uint gsScaleFactor)
+uint GetGSFrameBufferSize(const uint gsScaleFactor)
 #else
-static inline uint32_t GetGSFrameBuffeSize(const uint32_t gsScaleFactor)
+static inline uint32_t GetGSFrameBufferSize(const uint32_t gsScaleFactor)
 #endif
 {
     switch (gsScaleFactor) {

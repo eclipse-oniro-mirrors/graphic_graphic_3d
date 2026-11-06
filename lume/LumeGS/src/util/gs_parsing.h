@@ -801,9 +801,9 @@ void ParseGSFullHarmonicsWithFilterAndSrParams(const size_t baseOffset, const si
         sizeof(PlyVertexDataWithFilterAndSrParams));
     
     const Math::Vec3 scaleExp =
-        Math::Vec3(std::exp(vertexData.scale[0]), std::exp(vertexData.scale[1]), std::exp(vertexData.scale[2]));
+        Math::Vec3(std::exp(vertexData.scale[0u]), std::exp(vertexData.scale[1u]), std::exp(vertexData.scale[2u]));
     const float opacity = 1.0f / (1.0f + std::exp(-vertexData.opacity));
-    Math::Vec4 rotNorm = NormalizeQuat(Math::Vec4(vertexData.rotation));
+    const Math::Vec4 rotNorm = NormalizeQuat(Math::Vec4(vertexData.rotation));
 
     GsObjectLoadData::GsSplatData data;
 

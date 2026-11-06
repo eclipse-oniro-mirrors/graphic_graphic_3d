@@ -385,9 +385,9 @@ struct GsRenderData {
     // SR upscale factor: LR = HR / srScale.
     uint32_t srScale { 4u };
 
-    RENDER_NS::RenderHandleReference srParamHandle;
-    RENDER_NS::RenderHandleReference foldedKernelHandle;
-    RENDER_NS::RenderHandleReference attrsTargetHandls;
+    BASE_NS::RenderHandleReference srParamsHandle;
+    BASE_NS::RenderHandleReference foldedKernelHandle;
+    BASE_NS::RenderHandleReference attrsTargetHandle;
 
     // Lightweight SR runtime parameters
     uint32_t srInChannels { 4u };

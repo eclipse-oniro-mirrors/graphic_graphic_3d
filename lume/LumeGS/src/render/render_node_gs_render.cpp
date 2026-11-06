@@ -1084,7 +1084,7 @@ void RenderNodeGsRender::CalculateRenderPassCounts(DescriptorCounts& dc)
     SetupPipelineLayout(gsDepthRenderPipelineLayout_,
         "gspipelinelayouts://gs3d_gaussian_splatting_render_depth.shaderpl", GS_MAX_NUM_GS_OBJECTS, dc);
     SetupPipelineLayout(gsRenderLrLightweightPipelineLayout_,
-        "gspipelinelayouts://gs3d_gaussian_splatting_lr_lightweight.shaderpl", GS_MAX_NUM_GS_OBJECTS, dc);
+        "gspipelinelayouts://gs3d_gaussian_splatting_render_lr_lightweight.shaderpl", GS_MAX_NUM_GS_OBJECTS, dc);
     SetupPipelineLayout(bindersGsRender_.lightweightSr.pl,
         "gspipelinelayouts://gs3d_lightweight_sr.shaderpl", GS_MAX_NUM_GS_OBJECTS, dc);
 }
@@ -2185,8 +2185,8 @@ void RenderNodeGsRender::PrecomputeGsFrameData(RENDER_NS::IRenderCommandList& cm
     GsRenderPushConstantStruct pc {};
  
     const float renderScale = static_cast<float>(dataStore_->IsLightweightSrActive())
-        : 1.0f
-        ? static_cast<float>(dataStore_->GetRenderScaleFactor());
+        ? 1.0f
+        : static_cast<float>(dataStore_->GetRenderScaleFactor());
     pc.viewportSize.x = static_cast<float>(scissorDesc_.extentWidth) / renderScale;
     pc.viewportSize.y = static_cast<float>(scissorDesc_.extentHeight) / renderScale;
     // When XEG upscale is enabled, no subpixel jittering is needed (jitterIndex = 0)
@@ -3850,8 +3850,8 @@ void RenderNodeGsRender::ExecuteGaussianRenderPassLightweight(RENDER_NS::IRender
     cmdList.BindDescriptorSet(0, set0Handle);
 
     GsRenderPushConstantStruct pc {};
-    pc.viewportSize.x = static_cast<float>(scissorDesc_.extentWidth);
-    pc.viewportSize.y = static_cast<float>(scissorDesc_.extentHeight);
+    pc.viewportSize.x = static_cast<float>(scissorDesc.extentWidth);
+    pc.viewportSize.y = static_cast<float>(scissorDesc.extentHeight);
     pc.jitterIndex = Math::clamp(jitterRendered_, 0u, 4u);
     pc.numGsObjects = static_cast<uint32_t>(dataStore_->GetGsPrimitives().size());
     pc.renderScaleFactor = scaleFactor;
@@ -3930,7 +3930,7 @@ void RenderNodeGsRender::ExecuteLightweightSr(
     const uint32_t width = hrW / renderData->srScale;
     const uint32_t height = hrH / renderData->srScale;
 
-    PsoData psoData = GetPsoData(bind.pl, gsRenderShaders_.lightweightSr, 0xFFFFffff);
+    const PsoData psoData = GetPsoData(bind.pl, gsRenderShaders_.lightweightSr, 0xFFFFffff);
     cmdList.BindPipeline(psoData.psoHandle);
 
     BindLightweightSrDescriptorSet(cmdList);
@@ -3942,8 +3942,8 @@ void RenderNodeGsRender::ExecuteLightweightSr(
     pc.viewportSize.y = static_cast<float>(height);
     pc.jitterIndex = Math::clamp(jitterRendered_, 0u, 4u);
     pc.gsScaleFactor = dataStore_->GetGsScaleFactor();
-    pc.srInChannels = renderData_>srInChannels;
-    pc.kernelSize = renderData->srkernelSize;
+    pc.srInChannels = renderData->srInChannels;
+    pc.kernelSize = renderData->srKernelSize;
     pc.bilinearResidual = 1u;
     pc.padAlign = 0u;
     pc.Mrow0 = renderData->calibMrow0;
