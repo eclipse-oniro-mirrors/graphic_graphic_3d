@@ -10,7 +10,7 @@
 layout(location = 0) in flat uint vColor;
 layout(location = 1) in vec2 vPosition;
 layout(location = 2) in vec2 vSquarePosition;
-layout(location = 3) in vec2 vSrParams;
+layout(location = 3) in vec3 vSrParams;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outAttrs;

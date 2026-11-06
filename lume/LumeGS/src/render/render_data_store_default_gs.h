@@ -260,7 +260,7 @@ public:
     void SetDirtyForGsModel(const uint32_t gsIdx, const bool isDirty) override;
 
     // Lightweight SR (Direct Attribute Rendering) pipeline runtime flag
-    void SetLightweightSrEnabled(bool enbale) override;
+    void SetLightweightSrEnabled(bool enable) override;
     bool GetLightweightSrEnabled() const override;
     bool IsLightweightSrActive() const override;
 

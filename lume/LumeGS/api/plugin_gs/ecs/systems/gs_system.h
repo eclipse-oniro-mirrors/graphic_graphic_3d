@@ -34,7 +34,7 @@ public:
     
     // Lightweight SR (Direct Attribute Rendering) pipeline ------------------
     virtual bool LoadFoldedKernel(BASE_NS::string_view uri, BASE_NS::string_view sceneName,
-        GS::gSrRenderData* renderData) = 0;
+        GS::GsRenderData* renderData) = 0;
     
     // Loads only the YUW= -> RGB calibration matrix. Returns ture on success.
     virtual bool LoadT3hCalib(BASE_NS::string_view sceneName, GS::GsRenderData* renderData) = 0;

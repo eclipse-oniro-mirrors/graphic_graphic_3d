@@ -134,11 +134,11 @@ public:
         const Math::Mat4X4 viewMatrix, GS::GsRenderData* renderData, const bool isCpuSortDone);
     // Lightweight sr compute pass folded-convolution + bilinear residual +
     // UV bilinear + YUV->RGB. Single dispatch weites final RGBA to HR target.
-    void ExcuteLightweightSr(RENDER_NS::IRenderCommandList& cmdList, GS::GsRenderData* renderData);
+    void ExecuteLightweightSr(RENDER_NS::IRenderCommandList& cmdList, GS::GsRenderData* renderData);
     // Bind the lightweight SR compute descriptor set (LR attrs/color, kernel, HR output).
     void BindLightweightSrDescriptorSet(RENDER_NS::IRenderCommandList& cmdList);
     // Renturns the HR target for yje current jitter frame (RT0-RT3 when gsScaleFactor > 1)
-    RENDER_NS GetJitteredGaussianRenderTarget() const;
+    RENDER_NS::RenderHandle GetJitteredGaussianRenderTarget() const;
 
     void ExecuteComputeSphericalHarmonics(RENDER_NS::IRenderCommandList& cmdList, GS::GsRenderData* renderData,
         const bool computeAll);

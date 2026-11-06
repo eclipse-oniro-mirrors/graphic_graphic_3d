@@ -159,7 +159,7 @@ void RenderNodeGsRender::InitNode(IRenderNodeContextManager& renderNodeContextMg
     // Lightweight SR LR render pass: 2 MRT attachments (color + attrs).
     {
         RENDER_NS::RenderNodeHandles::InputRenderPass inputRenderPass;
-        for (int i = 0; i < 2; i+) {
+        for (int i = 0; i < 2; i++) {
             RenderNodeAttachment colorAttachment;
             colorAttachment.loadOp = AttachmentLoadOp::CORE_ATTACHMENT_LOAD_OP_CLEAR;
             colorAttachment.storeOp = AttachmentStoreOp::CORE_ATTACHMENT_STORE_OP_STORE;
@@ -949,7 +949,6 @@ void RenderNodeGsRender::UpdateRenderStatusUbo(RENDER_NS::IRenderCommandList& cm
 
     const GsRenderStatusUbo pc = { jitterRendered_ + 1u, static_cast<uint32_t>(frameIdx_),
         srScaleFactor, renderData->convertGsColorSrgb ? 1u : 0u, dataStore_->GetDRSScale(),
-        dataStore_->GetRenderScaleFactor(), renderData->convertGsColorSrgb ? 1u : 0u, dataStore_->GetDRSScale(),
         renderData->gsEnableDepthPass ? 1u : 0u, dataStore_->GetRenderSharpeningCoefficient(),
         dataStore_->GetXegUpscaleEnabled() ? 1u : 0u };
     cmdList.PushConstant(psoData.pushConstant, reinterpret_cast<const uint8_t*>(&pc));
@@ -3793,11 +3792,11 @@ void RenderNodeGsRender::ExecuteBackendFrame(
 RenderNodeGsRender::~RenderNodeGsRender() = default;
 #endif
 
-void RenderNodeGsRender::ExcuteGaussianRenderPassLightweight(RENDER_NS::IRenderCommandList& cmdList,
+void RenderNodeGsRender::ExecuteGaussianRenderPassLightweight(RENDER_NS::IRenderCommandList& cmdList,
     const Math::Mat4X4 viewMatrix, GS::GsRenderData* renderData, const bool isCpuSortDone)
 {
     if (renderData->srScale == 0u) {
-        CORE_LOG_E("ExcuteGaussianRenderPaddLightweight: srScale is 0, skipping LR render pass.");
+        CORE_LOG_E("ExecuteGaussianRenderPaddLightweight: srScale is 0, skipping LR render pass.");
         return;
     }
 
@@ -3808,23 +3807,24 @@ void RenderNodeGsRender::ExcuteGaussianRenderPassLightweight(RENDER_NS::IRenderC
     const uint32_t lrH = hrH / renderData->srScale;
 
     // Attachment 0: LR color target
-    gsRenderLrLightweightPass_.renderPassDesc.attachmentHandles[0] = gsHandleCache_.lrColorTargetHandle.GetHandle();
+    gsRenderLrLightweightPass_.renderPassDesc.attachmentHandles[0] = gsHandlesCache__.lrColorTargetHandle.GetHandle();
     // Attachment 1: alpha-blended SR attributes (RGBS16F, LR)
-    gsRenderLrLightweightPass_.renderPassDesc.attachmentHandles[1] = gsHandleCache_.attrsTargetHandle.GetHandle();
+    gsRenderLrLightweightPass_.renderPassDesc.attachmentHandles[1] = gsHandlesCache__.attrsTargetHandle.GetHandle();
 
     const uint32_t numGs = dataStore_->GetNumActiveGs();
     const ViewportDesc viewportDesc { 0.f, 0.f, static_cast<float>(lrW), static_cast<float>(lrH), 0.f, 1.f};
     const ScissorDesc scissorDesc { 0u, 0u, lrW, lrH };
 
-    gsRenderLrLightweightPass_.renderPassDesc.renderArea.extenWidth = lrW;
+    gsRenderLrLightweightPass_.renderPassDesc.renderArea.extentWidth = lrW;
     gsRenderLrLightweightPass_.renderPassDesc.renderArea.extenHeight = lrH;
 
-    cmdList.BeginRenderPASS(gsRenderLrLightweightPass_.renderpassDesc, gsRenderLrLightweightPass_.subpassStartIndex);
+    cmdList.BeginRenderPass(gsRenderLrLightweightPass_.renderpassDesc, gsRenderLrLightweightPass_.subpassStartIndex,
+        gsRenderLrLightweightPass_.subpassDesc);
 
     cmdList.SetDynamicStateScissor(scissorDesc);
     cmdList.SetDynamicStateViewport(viewportDesc);
 
-    const PsoData = GetRenderPsoData(*renderNodeContextMgr_, gsRenderLrLightweightHandle_);
+    const PsoData psoData = GetRenderPsoData(*renderNodeContextMgr_, gsRenderLrLightweightHandle_);
     cmdList.BindPipeline(psoData.psoHandle);
 
     VertexBuffer vb;
@@ -3840,6 +3840,7 @@ void RenderNodeGsRender::ExcuteGaussianRenderPassLightweight(RENDER_NS::IRenderC
         indexPingPong_ ? gsHandlesCache_.gsIndicesRef2.GetHandle() : gsHandlesCache_.gsIndicesRef.GetHandle(), 0);\
     
     const auto& set0Handle = gsRenderLrLightweightSet0_->GetDescriptorSetHandle();
+    cmdList.UpdateDescriptorSet(set0Handle, gsRenderLrLightweightSet0_->GetDescriptorSetLayoutBindResources());
     cmdList.BindDescriptorSet(0, set0Handle);
 
     GsRenderPushConstantStruct pc {};
@@ -3851,7 +3852,7 @@ void RenderNodeGsRender::ExcuteGaussianRenderPassLightweight(RENDER_NS::IRenderC
 
     cmdList.PushConstant(psoData.pushConstant, reinterpret_cast<const uint8_t*>(&pc));
     if (renderData->CanUseGpuSort() && !renderData->anyComputeLods) {
-        cmdList.DispatchIndirect(gpuSortIndirectDrawBuffer_.GetHandle(), 0u, 1u, 0u);
+        cmdList.DrawIndirect(gpuSortIndirectDrawBuffer_.GetHandle(), 0u, 1u, 0u);
     } else {
         cmdList.Draw(4u, numGs, 0, 0);
     }
@@ -3863,9 +3864,9 @@ void RenderNodeGsRender::BindLightweightSrDescriptorSet(RENDER_NS::IRenderComman
 {
     auto& bind = bindersGsRender_.lightweightSr;
 
-    bind.set0->BindImage(0u, gsHandleCache_.attrsTargetHandle.GetHandle());
-    bind.set0->BindImage(1u, gsHandleCache_.lrColorTargetHandle.GetHandle());
-    bind.set0->BindImage(2u, gsHandleCache_.foldedKernelHandle.GetHandle(), 0);
+    bind.set0->BindImage(0u, gsHandlesCache__.attrsTargetHandle.GetHandle());
+    bind.set0->BindImage(1u, gsHandlesCache__.lrColorTargetHandle.GetHandle());
+    bind.set0->BindBuffer(2u, gsHandlesCache__.foldedKernelHandle.GetHandle(), 0);
     bind.set0->BindImage(3u, GetJitteredGaussianRenderTarget());
 
     const auto& set0Handle = bind.set0->GetDescriptorSetHandle();
@@ -3875,7 +3876,7 @@ void RenderNodeGsRender::BindLightweightSrDescriptorSet(RENDER_NS::IRenderComman
 
 RenderHandle RenderNodeGsRender::GetJitteredGaussianRenderTarget() const
 {
-    RenderHandle outHandle = gsHandlesCache_.gaussianRenderTargte0.GetHandle();
+    RenderHandle outHandle = gsHandlesCache_.gaussianRenderTarget0.GetHandle();
     if (dataStore_->GetGsScaleFactor() > 1u) {
         switch (jitterRendered_) {
             case 0u:
@@ -3899,21 +3900,21 @@ RenderHandle RenderNodeGsRender::GetJitteredGaussianRenderTarget() const
 
 // Lightweight SR computePass: folded-convolution + bilinear residual +
 // UV bilinear + YUV->RGB. Single dispatch writes final RGBA to HR target.
-void RenderNodeGsRender::ExcuteLightweightSr(
+void RenderNodeGsRender::ExecuteLightweightSr(
     RENDER_NS::IRenderCommandList& cmdList, GS::GsRenderData* renderData)
 {
-    auto& bind = binderGsRender_.lightweightSr;
+    auto& bind = bindersGsRender_.lightweightSr;
 
     // Guard: skip SR compute until folded kernel data is loaded.
-    if (!RENDER_NS::RenderHandleUntil::IsValid(gsHandlesCache_.foldedKernelHandle.GetHandle())) {
-        CORE_LOG_E("ExcuteLightweightSr: folded kernel handle invalid, skipping SR compute");
+    if (!RENDER_NS::RenderHandleUtil::IsValid(gsHandlesCache_.foldedKernelHandle.GetHandle())) {
+        CORE_LOG_E("ExecuteLightweightSr: folded kernel handle invalid, skipping SR compute");
         return;
     }
 
     // Defence in depth: LoadFoldedKernel() reject invalid sr_scale values, but
     // never divide by srScale == 0 below.
     if (renderData->srScale == 0u) {
-        CORE_LOG_E("ExcuteLightweightSr: srScale is 0, skipping SR compute");
+        CORE_LOG_E("ExecuteLightweightSr: srScale is 0, skipping SR compute");
         return;
     }
 
@@ -3935,8 +3936,8 @@ void RenderNodeGsRender::ExcuteLightweightSr(
     pc.viewportSize.y = static_cast<float>(height);
     pc.jitterIndex = Math::clamp(jitterRendered_, 0u, 4u);
     pc.gsScaleFactor = dataStore_->GetGsScaleFactor();
-    pc.srInChannels = dataStore_->srInChannels;
-    pc.kernelSize = dataStore_->srkernelSize;
+    pc.srInChannels = renderData_->srInChannels;
+    pc.kernelSize = renderData_->srkernelSize;
     pc.bilinearResidual = 1u;
     pc.padAlign = 0u;
     pc.Mrow0 = renderData->calibMrow0;
@@ -3945,8 +3946,8 @@ void RenderNodeGsRender::ExcuteLightweightSr(
 
     cmdList.PushConstant(psoData.pushConstant, reinterpret_cast<const uint8_t*>(&pc));
 
-    const uint32_t tgcX = (width / GS_T3H_TGS) * (width % GS_T3H_TGS > 0 ? 1 : 0);
-    const uint32_t tgcY = (height / GS_T3H_TGS) * (height % GS_T3H_TGS > 0 ? 1 : 0);
+    const uint32_t tgcX = (width / GS_T3H_TGS) + (width % GS_T3H_TGS > 0 ? 1 : 0);
+    const uint32_t tgcY = (height / GS_T3H_TGS) + (height % GS_T3H_TGS > 0 ? 1 : 0);
 
     cmdList.Dispatch(tgcX, tgcY, 1u);
 }

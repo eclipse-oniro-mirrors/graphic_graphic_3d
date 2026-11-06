@@ -346,10 +346,10 @@ void CullTransparentGaussians(GS::GsPrimitive& primitive, GS::GsObjectLoadDataEx
 
     // Keep srParams in sync with the compacted arrays so that srParams[ii] still
     // matches surviving gaussian ii (uploaded after culling)
-    BASE_NS::vevtor<Math::Vec3> srParams;
-    const bool compactSrParams = loadData->srParams.size() == static_cast<size_t>(primitive.numGS);
+    BASE_NS::vector<Math::Vec3> srParams;
+    const bool compactSrParams = loadData->srParams.size() == static_cast<size_t>(primitive.numGs);
     if (compactSrParams) {
-        srParams.reserve(primitive.numGS);
+        srParams.reserve(primitive.numGs);
     }
 
     for (size_t ii = 0; ii < primitive.numGs; ii++) {

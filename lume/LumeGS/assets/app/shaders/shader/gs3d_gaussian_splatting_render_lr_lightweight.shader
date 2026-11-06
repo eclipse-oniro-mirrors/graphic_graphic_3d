@@ -36,10 +36,10 @@
                         "enableBlend": true,
                         "colorWriteMask": "r_bit|g_bit|b_bit|a_bit",
                         "srcColorBlendFactor": "one",
-                        "dstColorBlendFactor": "one_minus_dst_alpha",
+                        "dstColorBlendFactor": "one_minus_src_alpha",
                         "colorBlendOp": "add",
                         "srcAlphaBlendFactor": "one",
-                        "dstAlphaBlendFactor": "one_minus_dst_alpha",
+                        "dstAlphaBlendFactor": "one_minus_src_alpha",
                         "alphaBlendOp": "add"
                     },
                     "colorAttachments": [
@@ -47,10 +47,10 @@
                         "enableBlend": true,
                         "colorWriteMask": "r_bit|g_bit|b_bit|a_bit",
                         "srcColorBlendFactor": "one",
-                        "dstColorBlendFactor": "one_minus_dst_alpha",
+                        "dstColorBlendFactor": "one_minus_src_alpha",
                         "colorBlendOp": "add",
                         "srcAlphaBlendFactor": "one",
-                        "dstAlphaBlendFactor": "one_minus_dst_alpha",
+                        "dstAlphaBlendFactor": "one_minus_src_alpha",
                         "alphaBlendOp": "add"
                     }
                     ]

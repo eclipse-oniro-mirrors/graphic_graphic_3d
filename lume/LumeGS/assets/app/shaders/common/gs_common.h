@@ -125,7 +125,7 @@ constexpr uint32_t GS_PROCESS_DATA_TGS { 64u };
 constexpr uint32_t GS_DENSE_OBJECT_TGS { 64u };
 constexpr uint32_t GS_DEPTH_TGS { 64u };
 
-constexpr uint32_t GS_T3H_TGS { 64u };
+constexpr uint32_t GS_T3H_TGS { 16u };
 
 constexpr uint32_t GS_DEPTH_APPLY_XY_TGS { 16u };
 
@@ -208,7 +208,7 @@ constexpr float GS_MAX_SPLAT_EXTENT { 3.1622776f };
 // Returns the frame buffer size for the given GS scale factor
 // Used by both C++ render node code and the lightweight SR pipeline
 #ifdef VULKAN
-uint GetGsFrameBuffeSize(const unit gsScaleFactor)
+uint GetGsFrameBuffeSize(const uint gsScaleFactor)
 #else
 static inline uint32_t GetGsFrameBuffeSize(const uint32_t gsScaleFactor)
 #endif
@@ -222,7 +222,7 @@ static inline uint32_t GetGsFrameBuffeSize(const uint32_t gsScaleFactor)
             return GS_FRAME_BUFFER_SIZE_SCALE2;
         case 4: // case 4
             return GS_FRAME_BUFFER_SIZE_SCALE4;
-        defualt:
+        default:
             return GS_FRAME_BUFFER_SIZE_SCALE4;
     }
 }

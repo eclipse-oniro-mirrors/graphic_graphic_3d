@@ -140,14 +140,14 @@ struct GsLightweightSrPushConstantStruct {
     vec2 viewportSize;
     uint jitterIndex;
     uint gsScaleFactor;
-    uint srInchannels;
+    uint srInChannels;
     uint kernelSize;
     uint bilinearResidual;
     uint padAlign;
     vec4 Mrow0;
     vec4 Mrow1;
     vec4 Mrow2;
-}
+};
 
 // <depth, index> pairs for depth sorting
 struct SortKeyIndex {

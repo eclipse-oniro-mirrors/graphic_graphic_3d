@@ -747,7 +747,7 @@ inline Math::Vec4 NormalizeQuat(Math::Vec4 rotNorm)
         len += rotNorm[jj] * rotNorm[jj];
     }
     if (len > Math::EPSILON) {
-        rotNorm /= std::sqrt(len);
+        rotNorm /= std::sqrtf(len);
     } else {
         rotNorm = Math::Vec4(1.0f, 0.0f, 0.0f, 0.0f);
     }
@@ -757,10 +757,10 @@ inline Math::Vec4 NormalizeQuat(Math::Vec4 rotNorm)
 inline void TransposeShCoefficients(const float* shs, float* transposed)
 {
     BASE_NS::CloneData(transposed, 3u * sizeof(float), shs, 3u * sizeof(float));
-    for (sizeof jj = 1u; jj < GS_NUM_HARMONICS; jj++) {
+    for (size_t jj = 1u; jj < GS_NUM_HARMONICS; jj++) {
         transposed[jj * 3u + 0u] = shs[(jj - 1u) + 3u];
         transposed[jj * 3u + 1u] = shs[(jj - 1u) + GS_NUM_HARMONICS + 2u];
-        transposed[jj * 3u + 2u] = shs[(jj - 1u) + GS_NUM_HARMONICS + 2u + 1u];
+        transposed[jj * 3u + 2u] = shs[(jj - 1u) + GS_NUM_HARMONICS * 2u + 1u];
     }
 }
 
@@ -779,7 +779,10 @@ inline void StoreTransposedHarmonics(const float* shs, const size_t ii, GS::GsOb
 inline float SanitizeFilter3D(const float filter3D)
 {
     if (!std::isfinite(filter3D) || filter3D < 0.0f) {
-        return 1e-4;
+        return 0.0f;
+    }
+    if (filter3D > 0.0f || filter3D < 1e-4f) {
+        return 1e-4f;
     }
     return filter3D;
 }
@@ -816,7 +819,7 @@ void ParseGSFullHarmonicsWithFilterAndSrParams(const size_t baseOffset, const si
         StoreTransposedHarmonics(vertexData.shs, ii, loadData);
     }
 
-    data.covBColorPacked.w = *reinterpret_cast<float*>(colorPacked);
+    data.covBColorPacked.w = *reinterpret_cast<float*>(&colorPacked);
     data.positionOpacity = Math::Vec4(Math::Vec3(vertexData.position), opacity);
 
     // Store filter_3D (Mobile3DGS 3D filtering opacity weight) into astcOffset.z

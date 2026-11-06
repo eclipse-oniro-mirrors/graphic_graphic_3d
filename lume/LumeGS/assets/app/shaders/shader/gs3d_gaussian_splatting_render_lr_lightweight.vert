@@ -17,7 +17,7 @@ layout(location = 0) out flat uint vColor;
 layout(location = 1) out CORE_RELAXEDP vec2 vPosition;
 layout(location = 2) out vec2 vSquarePosition;
 // Per-gaussian lightweight SR attributes (3dgsSS "sr_params")
-layout(location = 3) out vec2 vSrParams;
+layout(location = 3) out vec3 vSrParams;
 
 layout(set = 0, binding = 0, std140) readonly uniform uCameraMatrices
 {
@@ -31,7 +31,7 @@ layout(set = 0, binding = 1, std140) readonly uniform uGSDynamicDataBuffer
 
 layout(set = 0, binding = 2, std430) readonly restrict buffer uSrParams
 {
-    float srParmas[];
+    float srParams[];
 };
 
 layout(set = 0, binding = 3, std430) readonly restrict buffer inSortedIndices
@@ -54,12 +54,12 @@ int GetGsObjectIndex(const uint elementId) {
     return -1;
 }
 
-const CORE_RELAXEDP vec2 VERTEX_POSITION[4] = vec2[] {
+const CORE_RELAXEDP vec2 VERTEX_POSITION[4] = vec2[] (
     vec2(-1.0f, -1.0f);
     vec2(1.0f, -1.0f);
     vec2(1.0f, 1.0f);
     vec2(-1.0f, 1.0f);
-};
+);
 
 #define GS_SCALER(x) (x <= 0.5f ? (x * 0.5f + 0.75f) : (x <= 0.7f ? (x + 0.5f) : (x * 0.16666667f + 1.0833333f)))
 
@@ -76,7 +76,7 @@ void main(void)
     const vec2 majorAxis = unpackHalf2x16(dataPacked.z);
     const vec2 minorAxis = unpackHalf2x16(dataPacked.w);
 
-    const vec2 postion = VERTEX_POSITION[gl_VertexIndex];
+    const vec2 position = VERTEX_POSITION[gl_VertexIndex];
     
     const float gaussianOpacity = float(colorPacked & 0xFF) * (1.0f / 255.0f);
     
@@ -90,7 +90,7 @@ void main(void)
             vSrParams = vec3(0.0f);
         } else {
             const uint srRow = 3u * (gaussianId - gsDynamicDatas[gsIndex].startOffset);
-            vSrParams = vec3(srParmas[srRow], srParmas[srRow + 1u], srParmas[srRow + 2u]);
+            vSrParams = vec3(srParams[srRow], srParams[srRow + 1u], srParams[srRow + 2u]);
         }
     }
 

@@ -126,7 +126,7 @@ float GS::ComputeSplatExtent(
     return BASE_NS::Math::sqrt(maxEigenvalue) * stdDevMultiplier;
 }
 
-static void CreatLightweightSrTargets(GS::GsRenderData* renderData, const GS::GsLoadContext& loadCtx,
+static void CreateLightweightSrTargets(GS::GsRenderData* renderData, const GS::GsLoadContext& loadCtx,
     const BASE_NS::Math::UVec2 renderSize, const GpuImageDesc& desc)
 {
     RENDER_NS::IGpuResourceManager& gpuResourceMgr = loadCtx.renderContext_->GetDevice().GetGpuResourceManager();
@@ -160,7 +160,7 @@ static void CreatLightweightSrTargets(GS::GsRenderData* renderData, const GS::Gs
         lrAttrsDesc.imageType = ImageType::CORE_IMAGE_TYPE_2D;
         lrAttrsDesc.imageTiling = ImageTiling::CORE_IMAGE_TILING_OPTIMAL;
         lrAttrsDesc.imageViewType = ImageViewType::CORE_IMAGE_VIEW_TYPE_2D;
-        desc.format = Format::BASE_FORMAT_R16G16B16A16_SFLOAT;
+        lrAttrsDesc.format = Format::BASE_FORMAT_R16G16B16A16_SFLOAT;
         lrAttrsDesc.engineCreationFlags =
             EngineImageCreationFlagBits::CORE_ENGINE_IMAGE_CREATION_DYNAMIC_BARRIERS;
         renderData->attrsTargetHandle =
@@ -189,7 +189,7 @@ void CreateGaussianRenderTargets(GS::GsRenderData* renderData, const GS::GsLoadC
         renderData->gaussianRenderTarget2 = gpuResourceMgr.Create("GS3DRenderTarget2_" + loadCtx.uniqueName, desc);
         renderData->gaussianRenderTarget3 = gpuResourceMgr.Create("GS3DRenderTarget3_" + loadCtx.uniqueName, desc);
     } else {
-        if (renderData->lightweightSrEnabled && loadCtx.dataStore_->GetGsScaleFactor() == 1u) {
+        if (renderData->lightweightSrEnabled && loadCtx.dataStoreGs_->GetGsScaleFactor() == 1u) {
             desc.width = 2u;
             desc.height = 2u;
         } else {
@@ -212,7 +212,7 @@ void CreateGaussianRenderTargets(GS::GsRenderData* renderData, const GS::GsLoadC
     desc.format = Format::BASE_FORMAT_R16G16_SFLOAT;
     renderData->gaussianRenderTargetDepth1 =
         gpuResourceMgr.Create("GS3DRenderTargetDepth1_" + loadCtx.uniqueName, desc);
-    CreatLightweightSrTargets(renderData, loadCtx, renderSize, desc);
+    CreateLightweightSrTargets(renderData, loadCtx, renderSize, desc);
 }
 
 void CreateGsRenderImages(
@@ -1165,8 +1165,8 @@ GS::GsPrimitive GS::LoadGaussianData(const BASE_NS::string& gsPath, GS::GsRender
     if (formatType == PlyFormatType::FullHarmonicsFilterSrParams && !loadData.srParams.empty()) {
         RENDER_NS::IGpuResourceManager& gpuResourceMgr = loadCtx.renderContext_->GetDevice().GetGpuResourceManager();
         const uint32_t srByteSize = static_cast<uint32_t>(loadData.srParams.size()) * sizeof(BASE_NS::Math::Vec3);
-        BASE_NS::array_view<const unit8_t> srDataView(
-            reinterpret_cast<const unit8_t*>(loadData.srParams.data()), srByteSize);
+        BASE_NS::array_view<const uint8_t> srDataView(
+            reinterpret_cast<const uint8_t*>(loadData.srParams.data()), srByteSize);
         renderData->srParamsHandle = CreateGsBuffer(gpuResourceMgr,
             BASE_NS::string("GS3DsrParams_") + BASE_NS::string(loadCtx.uniqueName),
             srByteSize, srDataView,

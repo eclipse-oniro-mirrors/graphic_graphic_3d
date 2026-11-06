@@ -379,8 +379,8 @@ struct GsRenderData {
 
     // YUV -> RGB calibration matrix loaded from gs3d_t3h_clib_<scene>.bin
     RENDER_NS::Math::Vec calibMrow0 { 1.0f, 0.0f, 1.402f, -0.701f };
-    RENDER_NS::Math::Vec calibMrow0 { 1.0f, -0.344f, -0.714f, 0.529f };
-    RENDER_NS::Math::Vec calibMrow0 { 1.0f, 1.772f, 0.0f, -0.886f };
+    RENDER_NS::Math::Vec calibMrow1 { 1.0f, -0.344f, -0.714f, 0.529f };
+    RENDER_NS::Math::Vec calibMrow2 { 1.0f, 1.772f, 0.0f, -0.886f };
 
     // SR upscale factor: LR = HR / srScale.
     unit32_t srScale { 4u };
@@ -453,7 +453,7 @@ public:
     virtual void SetLightweightSrEnabled(bool enable) = 0;
     virtual bool GetLightweightSrEnabled() const = 0;
     virtual bool IsLightweightSrActive() const = 0;
-    virtual bool GsRenderData* GetGsRenderData() const = 0;
+    virtual const GsRenderData* GetGsRenderData() const = 0;
 };
 } // namespace GS
 
