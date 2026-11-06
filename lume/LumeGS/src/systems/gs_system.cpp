@@ -871,7 +871,7 @@ bool GsSystem::Update(bool frameRenderingQueued, uint64_t time, uint64_t delta)
     // Lightweight SR activation vs. render target state re-sync.
     if (renderData && dataStoreGs_->IsLightweightSrActive() &&
         dataStoreGs_->GetGsScaleFactor() != 0xFFFFffffu && EntityUtil::InValid(renderTargetHostEntity_)) {
-        const bool lrTargetMissing = 
+        const bool lrTargetMissing =
             !RENDER_NS::RenderHandleUtil::IsValid(renderData->lrColorTargetHandle().GetHandle()) ||
             !RENDER_NS::RenderHandleUtil::IsValid(renderData->attrsTargetHandle().GetHandle());
         bool rt0SizeMismatch = false;
@@ -1496,14 +1496,14 @@ bool ReadSrKernelBinary(IFileManager& fileManager, const SrKernelMetadata& meta,
     const uint32_t srScaleSq = meta.srScale * meta.srScale;
     const uint64_t expectedLen = static_cast<uint64_t>(srScaleSq) * meta.inChannels * meta.kernelSize *
         meta.kernelSize * sizeof(float);
-    if(kernelLen != expectedLen) {
+    if (kernelLen != expectedLen) {
         CORE_LOG_E("LoadFoldedKernel: kernel size mismatch (got=%llu, expected=%llu)",
             static_cast<unsigned long long>(kernelLen),
             static_cast<unsigned long long>(kernelLen));
         return false;
     }
     kernelData.resize(static_cast<size_t>(kernelLen));
-    if(kernelFile->Read(kernelData.data(), kernelLen) != kernelLen) {
+    if (kernelFile->Read(kernelData.data(), kernelLen) != kernelLen) {
         CORE_LOG_E("LoadFoldedKernel: failed to read kernel bin");
         return false;
     }

@@ -141,7 +141,7 @@ static void CreatLightweightSrTargets(GS::GsRenderData* renderData, const GS::Gs
         lrColorDesc.format = Format::BASE_FORMAT_R8G8B8A8_UNORM;
         lrColorDesc.width = lrW;
         lrColorDesc.height = lrH;
-        renderData->lrColorTargetHandle = 
+        renderData->lrColorTargetHandle =
             gpuResourceMgr.Create("GS3DLrColor_" + loadCtx.uniqueName, lrColorDesc);
         
         // SR attrs target: RGBA16F, LR, MRT, attachment 1 of the lightweight
@@ -161,12 +161,12 @@ static void CreatLightweightSrTargets(GS::GsRenderData* renderData, const GS::Gs
         lrAttrsDesc.imageTiling = ImageTiling::CORE_IMAGE_TILING_OPTIMAL;
         lrAttrsDesc.imageViewType = ImageViewType::CORE_IMAGE_VIEW_TYPE_2D;
         desc.format = Format::BASE_FORMAT_R16G16B16A16_SFLOAT;
-        lrAttrsDesc.engineCreationFlags = 
+        lrAttrsDesc.engineCreationFlags =
             EngineImageCreationFlagBits::CORE_ENGINE_IMAGE_CREATION_DYNAMIC_BARRIERS;
-        renderData->attrsTargetHandle = 
+        renderData->attrsTargetHandle =
             gpuResourceMgr.Create("GS3DAttrs_" + loadCtx.uniqueName, lrAttrsDesc);
     }
-}    
+}
 
 void CreateGaussianRenderTargets(GS::GsRenderData* renderData, const GS::GsLoadContext& loadCtx, GpuImageDesc& desc,
     const BASE_NS::Math::UVec2 renderSize, const BASE_NS::Math::UVec2 resolution)
@@ -194,7 +194,7 @@ void CreateGaussianRenderTargets(GS::GsRenderData* renderData, const GS::GsLoadC
             desc.height = 2u;
         } else {
             desc.width = renderSize.x;
-            desc.height = renderSize.y;            
+            desc.height = renderSize.y;
         }
         renderData->gaussianRenderTarget1 = gpuResourceMgr.Create("GS3DRenderTarget1_" + loadCtx.uniqueName, desc);
         renderData->gaussianRenderTarget2 = gpuResourceMgr.Create("GS3DRenderTarget2_" + loadCtx.uniqueName, desc);
@@ -877,7 +877,7 @@ GS::GsPrimitive GS::LoadGaussianData(const BASE_NS::string& gsPath, GS::GsRender
                     primitive.isValid = false;
                     return primitive;
                 }
-                break;            
+                break;
             case PlyFormatType::RestrictedHarmonics:
                 if (fileByteLen - headerEndIdx !=
                     sizeof(PlyVertexDataRestrictedHarmonics) * static_cast<size_t>(numGaussians)) {

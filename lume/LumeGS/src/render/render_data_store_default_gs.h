@@ -121,7 +121,7 @@ enum class PlyFormatType {
     RestrictedHarmonicsMinimal,    // position/shs[3]/opacity/scale/rotation
     RestrictedHarmonicsMinimalV2,  // position/scale/shs[3]/opacity/rotation
     RestrictedHarmonicsMinimalV3,  // position/rotation/scale/opacity/shs[3]
-    FullHarmonicsFilterSrParams;   // 66 pros: +filter + sr_params_0/1/2 (lightweight SR)
+    FullHarmonicsFilterSrParams,   // position/normal/shs[48]/opacity/scale/rotation/filter/srParams[3]
     Packed,                        // compressed
 };
 

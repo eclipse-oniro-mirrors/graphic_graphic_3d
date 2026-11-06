@@ -953,7 +953,7 @@ void ParseGSVertex(const PlyFormatType formatType, const size_t ii, const size_t
         case PlyFormatType::FullHarmonicsFilterSrParams:
             ParseGSFullHarmonicsWithFilterAndSrParams(0, ii, headerEndIdx, plyFileData, loadData,
                 enableScoreCulling, primitive, aabbMin, aabbMax);
-            break;        
+            break;
         case PlyFormatType::RestrictedHarmonicsMinimal:
             ParseGSRestrictedHarmonicsMinimal<PlyVertexDataRestrictedHarmonicsMinimal>(
                 0, ii, headerEndIdx, plyFileData, loadData, enableScoreCulling, primitive, aabbMin, aabbMax);
