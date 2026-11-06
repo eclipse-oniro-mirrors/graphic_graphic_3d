@@ -72,11 +72,31 @@ compile_shader()
     fi
     COMPILER_ARGS="$COMPILER_ARGS --source $SHADER_PATH"
 
-    if [ -z "$RENDER_INCLUDE_PATH" ];
-    then
-        $TEST_TOOL_PATH/LumeShaderCompiler $COMPILER_ARGS --include $PROJECT_ROOT/LumeRender/api/
-    else
-        $TEST_TOOL_PATH/LumeShaderCompiler $COMPILER_ARGS --include $PROJECT_ROOT/Lume_3D/api/ --include $PROJECT_ROOT/LumeRender/api/
+    INCLUDE_ROOTS=("$PROJECT_ROOT/LumeRender/api/")
+    if [ -n "$RENDER_INCLUDE_PATH" ]; then
+        INCLUDE_ROOTS=("$PROJECT_ROOT/Lume_3D/api/" "${INCLUDE_ROOTS[@]}")
+    fi
+    INCLUDE_ARGS=()
+    for include_root in "${INCLUDE_ROOTS[@]}"; do
+        INCLUDE_ARGS+=(--include "$include_root")
+    done
+    $TEST_TOOL_PATH/LumeShaderCompiler $COMPILER_ARGS "${INCLUDE_ARGS[@]}"
+
+    # Report the same roots passed to the compiler, without coupling the GN
+    # template or its generic wrapper to this script's include policy.
+    if [ -n "${OHOS_SHADER_DEPENDENCY_FILE:-}" ]; then
+        python3 - "$OHOS_SHADER_DEPENDENCY_FILE" "$ASSETS_PATH" \
+            "$TEST_TOOL_PATH/LumeShaderCompiler" "$DEST_GEN_PATH" \
+            "${INCLUDE_ROOTS[@]}" <<'PY'
+import json
+import sys
+
+report, assets, tool, output, *includes = sys.argv[1:]
+with open(report, 'w', encoding='utf-8') as stream:
+    json.dump({'version': 1, 'input_files': [tool],
+               'input_roots': [assets, *includes],
+               'output_roots': [output]}, stream)
+PY
     fi
 }
 
