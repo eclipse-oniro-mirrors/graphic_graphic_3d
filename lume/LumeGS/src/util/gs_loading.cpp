@@ -1037,14 +1037,14 @@ GS::GsPrimitive GS::LoadGaussianData(const BASE_NS::string& gsPath, GS::GsRender
                     BASE_NS::Math::Vec3 aabbMax { std::numeric_limits<float>::lowest(),
                         std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest() };
 
-                    //keep the validity result local to this task and merge it under the lock,
-                    //so that primitive.isValid is never written concurrently.
+                    // keep the validity result local to this task and merge it under the lock,
+                    // so that primitive.isValid is never written concurrently.
                     bool localValid = true;
                     for (size_t ii = start; ii < end; ii++) {
                         if (!ParseGSVertex(formatType, ii, headerEndIdx, fileDataArray.GetData().data(), &loadData,
                             renderData->enableScoreCulling, primitive, aabbMin, aabbMax)) {
-                                localValid = false;
-                            }
+                            localValid = false;
+                        }
                     }
                     std::lock_guard<std::mutex> lock(aabbSyncMtx);
                     primitive.aabbMin = min(primitive.aabbMin, aabbMin);
@@ -1122,10 +1122,13 @@ GS::GsPrimitive GS::LoadGaussianData(const BASE_NS::string& gsPath, GS::GsRender
     if (renderData->enableGsPicking) {
         loadData.splatExtents.resize(primitive.numGs + primitive.numGs1);
         const size_t extentCount = loadData.gaussianPositions.size();
-        //Extents are computed in parallel over disjoint [start, end) ranges. Each task writes
-        //only its own range, so there is no shared write and no lock; the output is bit-identical
-        //to the serial per-splat loop
-        const size_t numThreads = Math::max<size_t>(loadCtx.threadPool_->GetNumberOfThreads(), 1u);
+        // Extents are computed in parallel over disjoint [start, end) ranges. Each task writes
+        // only its own range, so there is no shared write and no lock; the output is bit-identical
+        // to the serial per-splat loop
+        size_t numThreads = loadCtx.threadPool_->GetNumberOfThreads();
+        if (numThreads == 0u) {
+            numThreads = 1u;
+        }
         const size_t chunkSize = (extentCount + numThreads - 1) / numThreads;
         if (chunkSize == 0u) {
             // Empty data, nothing to parallelize
@@ -1144,7 +1147,7 @@ GS::GsPrimitive GS::LoadGaussianData(const BASE_NS::string& gsPath, GS::GsRender
                     break;
                 }
                 const size_t end = Math::min(start + chunkSize, extentCount);
-                auto task = CreateFunctionTask([&loadData, start, end](){
+                auto task = CreateFunctionTask([&loadData, start, end]() {
                     for (size_t sIdx = start; sIdx < end; sIdx++) {
                         const GsObjectLoadData::GsSplatData& splatData = loadData.gsVerticesData.Get(sIdx);
                         loadData.splatExtents[sIdx] =
@@ -1560,7 +1563,7 @@ void GS::CreateGsRenderDataBuffers(GS::GsRenderData* renderData, const size_t to
 
     // resize index data to match
     // The first frame is drawn with these indices before sorting completes. Using the identity
-    // order yilds an unsorted but complete image; initializing to 0 would make every splat
+    // order yields an unsorted but complete image; initializing to 0 would make every splat
     // reference element 0 and produce a degenerate image.
     renderData->gaussianIndices.resize(totalNumberIndexable);
     for (uint32_t ii = 0; ii < totalNumberIndexable; ii++) {

@@ -747,6 +747,7 @@ bool ParseGSRestrictedHarmonics(const size_t baseOffset, const size_t ii, const 
     uint8_t* plyFileData, GS::GsObjectLoadDataExt* loadData, bool enableScoreCulling, GS::GsPrimitive& primitive,
     BASE_NS::Math::Vec3& aabbMin, BASE_NS::Math::Vec3& aabbMax)
 {
+    (void)primitive;
     PlyVertexDataRestrictedHarmonics vertexData;
     BASE_NS::CloneData(static_cast<void*>(&vertexData), sizeof(PlyVertexDataRestrictedHarmonics),
         static_cast<void*>(plyFileData + (headerEndIdx + (ii - baseOffset) * sizeof(PlyVertexDataRestrictedHarmonics))),
