@@ -245,8 +245,10 @@ void RenderNodeGsRender::InitNode(IRenderNodeContextManager& renderNodeContextMg
         desc.engineCreationFlags = EngineBufferCreationFlagBits::CORE_ENGINE_BUFFER_CREATION_DYNAMIC_BARRIERS;
 
         desc.byteSize = sizeof(GsIndirectDrawDispatch) * 2u;
-        gpuSortIndirectDrawBuffer_ =
-            renderNodeContextMgr_->GetGpuResourceManager().Create("GsDrawDispatchIndirect_" + uniqueName, desc);
+        // Zero initialization must be performed here.
+        const BASE_NS::vector<uint8_t> zeroData(desc.byteSize, 0u);
+        gpuSortIndirectDrawBuffer_ = renderNodeContextMgr_->GetGpuResourceManager().Create(
+            "GsDrawDispatchIndirect_" + uniqueName, desc, BASE_NS::array_view<const uint8_t>(zeroData));
     }
 
     // create indirect buffer for GPU pre compute
