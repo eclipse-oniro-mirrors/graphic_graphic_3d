@@ -1037,13 +1037,21 @@ GS::GsPrimitive GS::LoadGaussianData(const BASE_NS::string& gsPath, GS::GsRender
                     BASE_NS::Math::Vec3 aabbMax { std::numeric_limits<float>::lowest(),
                         std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest() };
 
+                    //keep the validity result local to this task and merge it under the lock,
+                    //so that primitive.isValid is never written concurrently.
+                    bool localValid = true;
                     for (size_t ii = start; ii < end; ii++) {
-                        ParseGSVertex(formatType, ii, headerEndIdx, fileDataArray.GetData().data(), &loadData,
-                            renderData->enableScoreCulling, primitive, aabbMin, aabbMax);
+                        if (!ParseGSVertex(formatType, ii, headerEndIdx, fileDataArray.GetData().data(), &loadData,
+                            renderData->enableScoreCulling, primitive, aabbMin, aabbMax)) {
+                                localValid = false;
+                            }
                     }
                     std::lock_guard<std::mutex> lock(aabbSyncMtx);
                     primitive.aabbMin = min(primitive.aabbMin, aabbMin);
                     primitive.aabbMax = max(primitive.aabbMax, aabbMax);
+                    if (!localValid) {
+                        primitive.isValid = false;
+                    }
                 });
 
                 results.push_back(loadCtx.threadPool_->Push(BASE_NS::move(task)));
@@ -1113,9 +1121,43 @@ GS::GsPrimitive GS::LoadGaussianData(const BASE_NS::string& gsPath, GS::GsRender
     // compute splat extents for raycasting support
     if (renderData->enableGsPicking) {
         loadData.splatExtents.resize(primitive.numGs + primitive.numGs1);
-        for (size_t sIdx = 0; sIdx < loadData.gaussianPositions.size(); sIdx++) {
-            const GsObjectLoadData::GsSplatData& splatData = loadData.gsVerticesData.Get(sIdx);
-            loadData.splatExtents[sIdx] = ComputeSplatExtent(splatData.covAScale, splatData.covBColorPacked, 1.0f);
+        const size_t extentCount = loadData.gaussianPositions.size();
+        //Extents are computed in parallel over disjoint [start, end) ranges. Each task writes
+        //only its own range, so there is no shared write and no lock; the output is bit-identical
+        //to the serial per-splat loop
+        const size_t numThreads = Math::max<size_t>(loadCtx.threadPool_->GetNumberOfThreads(), 1u);
+        const size_t chunkSize = (extentCount + numThreads - 1) / numThreads;
+        if (chunkSize == 0u) {
+            // Empty data, nothing to parallelize
+        } else if (numThreads == 1u) {
+            for (size_t sIdx = 0; sIdx < extentCount; sIdx++) {
+                const GsObjectLoadData::GsSplatData& splatData = loadData.gsVerticesData.Get(sIdx);
+                loadData.splatExtents[sIdx] =
+                    ComputeSplatExtent(splatData.covAScale, splatData.covBColorPacked, 1.0f);
+            }
+        } else {
+            BASE_NS::vector<IThreadPool::IResult::Ptr> extentResults;
+            extentResults.reserve(numThreads);
+            for (size_t ti = 0; ti < numThreads; ti++) {
+                const size_t start = ti * chunkSize;
+                if (start >= extentCount) {
+                    break;
+                }
+                const size_t end = Math::min(start + chunkSize, extentCount);
+                auto task = CreateFunctionTask([&loadData, start, end](){
+                    for (size_t sIdx = start; sIdx < end; sIdx++) {
+                        const GsObjectLoadData::GsSplatData& splatData = loadData.gsVerticesData.Get(sIdx);
+                        loadData.splatExtents[sIdx] =
+                            ComputeSplatExtent(splatData.covAScale, splatData.covBColorPacked, 1.0f);
+                    }
+                });
+                extentResults.push_back(loadCtx.threadPool_->Push(BASE_NS::move(task)));
+            }
+            for (auto& result : extentResults) {
+                if (result) {
+                    result->Wait();
+                }
+            }
         }
     }
 #ifdef __OHOS_PLATFORM_PARSING_CAMERA_POSE_ENABLED__
@@ -1517,8 +1559,13 @@ void GS::CreateGsRenderDataBuffers(GS::GsRenderData* renderData, const size_t to
     }
 
     // resize index data to match
+    // The first frame is drawn with these indices before sorting completes. Using the identity
+    // order yilds an unsorted but complete image; initializing to 0 would make every splat
+    // reference element 0 and produce a degenerate image.
     renderData->gaussianIndices.resize(totalNumberIndexable);
-    std::fill(renderData->gaussianIndices.begin(), renderData->gaussianIndices.end(), 0u);
+    for (uint32_t ii = 0; ii < totalNumberIndexable; ii++) {
+        renderData->gaussianIndices[ii] = ii;
+    }
 
     if (loadCtx.dataStoreGs_->GetGsPrimitives().size() > 0) {
         renderData->gaussianPositions = gaussianPositions;

@@ -663,7 +663,9 @@ void PrecomputeCovariances(const BASE_NS::Math::Vec3 scale, const float mod, con
     covB = Math::Vec4(sigma[3u], sigma[4u], sigma[5u], 0.0);  // .w will contain the packed color
 }
 
-void ParseGSFullHarmonics(const size_t baseOffset, const size_t ii, const size_t headerEndIdx, uint8_t* plyFileData,
+// Return whether this point is valid. The caller (parallel task) merges the result
+// under its own lock, so that primitive.isValid is never written concurrently.
+bool ParseGSFullHarmonics(const size_t baseOffset, const size_t ii, const size_t headerEndIdx, uint8_t* plyFileData,
     GS::GsObjectLoadDataExt* loadData, bool enableScoreCulling, GS::GsPrimitive& primitive,
     BASE_NS::Math::Vec3& aabbMin, BASE_NS::Math::Vec3& aabbMax)
 {
@@ -736,11 +738,12 @@ void ParseGSFullHarmonics(const size_t baseOffset, const size_t ii, const size_t
     // sanity check, if everything was parsed correctly then these should all be zeros
     if (vertexData.normal[0u] != 0.0f || vertexData.normal[1u] != 0.0f || vertexData.normal[2u] != 0.0) {
         CORE_LOG_E("GS header format is invalid: non-zero normals!");
-        primitive.isValid = false;
+        return false;
     }
+    return true;
 }
 
-void ParseGSRestrictedHarmonics(const size_t baseOffset, const size_t ii, const size_t headerEndIdx,
+bool ParseGSRestrictedHarmonics(const size_t baseOffset, const size_t ii, const size_t headerEndIdx,
     uint8_t* plyFileData, GS::GsObjectLoadDataExt* loadData, bool enableScoreCulling, GS::GsPrimitive& primitive,
     BASE_NS::Math::Vec3& aabbMin, BASE_NS::Math::Vec3& aabbMax)
 {
@@ -790,8 +793,9 @@ void ParseGSRestrictedHarmonics(const size_t baseOffset, const size_t ii, const 
     // sanity check, if everything was parsed correctly then these should all be zeros
     if (vertexData.normal[0u] != 0.0f || vertexData.normal[1u] != 0.0f || vertexData.normal[2u] != 0.0) {
         CORE_LOG_E("GS header format is invalid: non-zero normals!");
-        primitive.isValid = false;
+        return false;
     }
+    return true;
 }
 
 template <typename VertexDataT>
@@ -843,33 +847,31 @@ void ParseGSRestrictedHarmonicsMinimal(const size_t baseOffset, const size_t ii,
     ProcessCullingData(ii, scaleExp, loadData->gaussianMaxScales, enableScoreCulling);
 }
 
-void ParseGSVertex(const PlyFormatType formatType, const size_t ii, const size_t headerEndIdx,
+bool ParseGSVertex(const PlyFormatType formatType, const size_t ii, const size_t headerEndIdx,
     uint8_t* plyFileData, GS::GsObjectLoadDataExt* loadData, bool enableScoreCulling, GS::GsPrimitive& primitive,
     BASE_NS::Math::Vec3& aabbMin, BASE_NS::Math::Vec3& aabbMax)
 {
     switch (formatType) {
         case PlyFormatType::FullHarmonics:
-            ParseGSFullHarmonics(0, ii, headerEndIdx, plyFileData, loadData, enableScoreCulling, primitive, aabbMin,
-                aabbMax);
-            break;
+            return ParseGSFullHarmonics(0, ii, headerEndIdx, plyFileData, loadData, enableScoreCulling, primitive,
+                aabbMin, aabbMax);
         case PlyFormatType::RestrictedHarmonicsMinimal:
             ParseGSRestrictedHarmonicsMinimal<PlyVertexDataRestrictedHarmonicsMinimal>(
                 0, ii, headerEndIdx, plyFileData, loadData, enableScoreCulling, primitive, aabbMin, aabbMax);
-            break;
+            return true;
         case PlyFormatType::RestrictedHarmonicsMinimalV2:
             ParseGSRestrictedHarmonicsMinimal<PlyVertexDataRestrictedHarmonicsMinimalV2>(
                 0, ii, headerEndIdx, plyFileData, loadData, enableScoreCulling, primitive, aabbMin, aabbMax);
-            break;
+            return true;
         case PlyFormatType::RestrictedHarmonicsMinimalV3:
             ParseGSRestrictedHarmonicsMinimal<PlyVertexDataRestrictedHarmonicsMinimalV3>(
                 0, ii, headerEndIdx, plyFileData, loadData, enableScoreCulling, primitive, aabbMin, aabbMax);
-            break;
+            return true;
         case PlyFormatType::RestrictedHarmonics:
-            ParseGSRestrictedHarmonics(0, ii, headerEndIdx, plyFileData, loadData, enableScoreCulling,
+            return ParseGSRestrictedHarmonics(0, ii, headerEndIdx, plyFileData, loadData, enableScoreCulling,
                 primitive, aabbMin, aabbMax);
-            break;
         default:
-            break;
+            return true;
     }
 }
 
@@ -1584,7 +1586,7 @@ void ProcessVertexDataCompressed(const std::shared_ptr<SpatialModel>& model, GS:
 }
 void ProcessVertexDataCompressed(const GS_DECODER::CompressedGsData& gsData, const GS::GsPrimitive& primitive,
     const size_t baseOffset, const size_t ii, GS::GsObjectLoadDataExt* loadData, bool enableScoreCulling,
-    BASE_NS::Math::Vec3& aabbMin, BASE_NS::Math::Vec3& aabbMax)
+    BASE_NS::Math::Vec3& aabbMin, BASE_NS::Math::Vec3& aabbMax, BASE_NS::vector<float>& decodeScratch)
 {
     GS_DECODER::GsSplatData gsVertex;
     GsObjectLoadData::GsSplatData data;
@@ -1602,8 +1604,8 @@ void ProcessVertexDataCompressed(const GS_DECODER::CompressedGsData& gsData, con
     }
 
     for (const auto& attr_meta : gsData.uwaHeader.attributeMetas) {
-        bool succeed =
-            GS_DECODER::DecodeAttribute(gsData.attributeDatas, attr_meta, gsVertex, ii, gsData.uwaHeader.numPoints);
+        bool succeed = GS_DECODER::DecodeAttribute(
+            gsData.attributeDatas, attr_meta, gsVertex, ii, gsData.uwaHeader.numPoints, decodeScratch);
         if (!succeed) {
             CORE_LOG_E("ProcessVertexDataCompressed: Decoding attributes failed!");
             return;
@@ -2119,9 +2121,11 @@ bool ParseGSCompressed(const uint8_t* fileData, size_t size, GS::GsRenderData* r
             BASE_NS::Math::Vec3 aabbMax { std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(),
                 std::numeric_limits<float>::lowest() };
 
+            //One decode buffer per thread, created outside the loop and reused inside it.
+            BASE_NS::vector<float> decodeScratch;
             for (size_t ii = startIdx; ii < endIdx; ii++) {
-                ProcessVertexDataCompressed(
-                    gsData, primitive, baseOffset, ii, loadData, renderData->enableScoreCulling, aabbMin, aabbMax);
+                ProcessVertexDataCompressed(gsData, primitive, baseOffset, ii, loadData,
+                    renderData->enableScoreCulling, aabbMin, aabbMax, decodeScratch);
 
                 if (loadCtx.shuttingDown_->load()) { // check exit flag
                     break;
