@@ -345,6 +345,10 @@ public:
     bool GetXegUpscaleEnabled() const override;
     void SetXegUpscaleEnabled(bool enabled) override;
 
+    // Physics simulation switch
+    bool GetPhysicsSimulationEnabled() const override;
+    void SetPhysicsSimulationEnabled(bool enabled) override;
+
     void SetCurrentAnimationTime(const float time);
     float GetCurrentAnimationTime() const;
 
@@ -526,6 +530,7 @@ private:
     float xegUpscaleSharpness_ { 0.5f }; // Internal parameter, not exposed
     bool xegUpscaleEnabled_ { false };   // XEG upscale enabled flag from configuration
     float xegUpscaleFactor_ { 1.0f };    // Default to 1.0f (no upscale)
+    bool physicsSimulationEnabled_ { false };
 };
 } // namespace GS
 
