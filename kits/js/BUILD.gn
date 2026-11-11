@@ -189,6 +189,7 @@ ohos_source_set("napi_source") {
 
   external_deps = [
     "c_utils:utils",
+    "bounds_checking_function:libsec_shared",
     "graphic_2d:EGL",
     "graphic_2d:GLESv3",
     "graphic_surface:surface",
@@ -255,6 +256,7 @@ ohos_source_set("napi_entry") {
 
   external_deps = [
     "c_utils:utils",
+    "bounds_checking_function:libsec_shared",
     "graphic_2d:EGL",
     "graphic_2d:GLESv3",
     "graphic_surface:surface",

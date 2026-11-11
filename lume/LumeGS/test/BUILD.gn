@@ -11,17 +11,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# TDD is only maintained on arm64: on arm, x86 and x86_64 both groups stay empty
+# so no LumeGS test target is built.
 group("unittest") {
     testonly = true
-    deps = [
-        "api_unit_test:lume_gs_test",
-        "gsedit_unit_test:gsedit_test",
-    ]
+    deps = []
+    if (target_cpu == "arm64") {
+        deps += [
+            "api_unit_test:lume_gs_test",
+            "gsedit_unit_test:gsedit_test",
+        ]
+    }
 }
 
 group("fuzztest") {
     testonly = true
-    deps = [
-        "fuzztest/loadgsscene_fuzzer:LoadGsSceneFuzzTest",
-    ]
+    deps = []
+    if (target_cpu == "arm64") {
+        deps += [ "fuzztest/loadgsscene_fuzzer:LoadGsSceneFuzzTest" ]
+    }
 }

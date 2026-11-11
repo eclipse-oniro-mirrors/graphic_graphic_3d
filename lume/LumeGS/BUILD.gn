@@ -264,6 +264,7 @@ ohos_source_set("3d_gs_src") {
   }
   external_deps = [
     "c_utils:utils",
+    "bounds_checking_function:libsec_shared",
     "hilog:libhilog",
     "hitrace:hitrace_meter",
     "graphic_2d:EGL",
@@ -333,6 +334,7 @@ ohos_source_set("3d_gs_ai_edit_loader") {
   }
   external_deps = [
     "c_utils:utils",
+    "bounds_checking_function:libsec_shared",
     "hilog:libhilog",
     "hitrace:hitrace_meter",
     "graphic_2d:EGL",

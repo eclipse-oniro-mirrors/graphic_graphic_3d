@@ -51,6 +51,7 @@ ohos_fuzztest("JsonUnescapeFuzzTest") {
 
   external_deps = [
     "c_utils:utils",
+    "bounds_checking_function:libsec_shared",
     "hilog:libhilog",
   ]
 
