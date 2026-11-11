@@ -454,6 +454,10 @@ public:
     virtual bool GetLightweightSrEnabled() const = 0;
     virtual bool IsLightweightSrActive() const = 0;
     virtual const GsRenderData* GetGsRenderData() const = 0;
+ 
+    // Physics simulation switch
+    virtual bool GetPhysicsSimulationEnabled() const = 0;
+    virtual void SetPhysicsSimulationEnabled(bool enabled) = 0;
 };
 } // namespace GS
 
