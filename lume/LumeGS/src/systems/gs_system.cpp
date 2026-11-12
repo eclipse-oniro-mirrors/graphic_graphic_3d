@@ -1591,9 +1591,9 @@ bool GsSystem::LoadT3hCalib(BASE_NS::string_view sceneName, GS::GsRenderData* re
         CORE_LOG_E("LoadT3hCalib: failed to read calib bin");
         return false;
     }
-    renderData->calibMrow0 = BASE_NS::Math::Vec4(calibData[0], calibData[1], calibData[2], calibData[9]);
-    renderData->calibMrow1 = BASE_NS::Math::Vec4(calibData[3], calibData[4], calibData[5], calibData[10]);
-    renderData->calibMrow2 = BASE_NS::Math::Vec4(calibData[6], calibData[7], calibData[8], calibData[11]);
+    renderData->calibMrow0 = BASE_NS::Math::Vec4(calibData[0], calibData[1], calibData[2], calibData[9]); // R = dot([0..2], YUV) + [9]
+    renderData->calibMrow1 = BASE_NS::Math::Vec4(calibData[3], calibData[4], calibData[5], calibData[10]); // G = dot([3..5], YUV) + [10]
+    renderData->calibMrow2 = BASE_NS::Math::Vec4(calibData[6], calibData[7], calibData[8], calibData[11]); // B = dot([6..8], YUV) + [11]
     return true;
 }
 

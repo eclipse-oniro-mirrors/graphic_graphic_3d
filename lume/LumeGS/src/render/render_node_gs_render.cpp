@@ -159,7 +159,7 @@ void RenderNodeGsRender::InitNode(IRenderNodeContextManager& renderNodeContextMg
     // Lightweight SR LR render pass: 2 MRT attachments (color + attrs).
     {
         RENDER_NS::RenderNodeHandles::InputRenderPass inputRenderPass;
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 2; i++) { // 2
             RenderNodeAttachment colorAttachment;
             colorAttachment.loadOp = AttachmentLoadOp::CORE_ATTACHMENT_LOAD_OP_CLEAR;
             colorAttachment.storeOp = AttachmentStoreOp::CORE_ATTACHMENT_STORE_OP_STORE;
