@@ -121,8 +121,10 @@ bool ParseUWAGSAttributeMeta(const uint8_t* dataStream, size_t size, size_t& poi
 // Helper function to map data type sizes
 size_t GetDataTypeSize(uint8_t dataType);
 
+// decodedData is provided by the caller and reused across the per-splat loop,
+// avoiding one vector allocation per (splat, attribute).
 bool DecodeAttribute(const BASE_NS::vector<uint8_t>& attributeStream, const UwaGsAttributeMeta& attributeInfo,
-    GsSplatData& gsVertex, size_t idx, size_t numGS);
+    GsSplatData& gsVertex, size_t idx, size_t numGS, BASE_NS::vector<float>& decodedData);
 
 bool ParseGsCompressedUwa(const uint8_t* dataStream, size_t size, CompressedGsData& gsData);
 

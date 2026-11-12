@@ -561,7 +561,8 @@ bool WriteToVertexData(const GS_DECODER::UwaGsAttributeMeta& attributeInfo, cons
 } // namespace
 
 bool GS_DECODER::DecodeAttribute(const BASE_NS::vector<uint8_t>& attributeStream,
-    const GS_DECODER::UwaGsAttributeMeta& attributeInfo, GsSplatData& gsVertex, size_t globalIdx, size_t numGS)
+    const GS_DECODER::UwaGsAttributeMeta& attributeInfo, GsSplatData& gsVertex, size_t globalIdx, size_t numGS,
+    BASE_NS::vector<float>& decodedData)
 {
     // check if the quantization flag is supported
     if (attributeInfo.attributeQuantizationFlag > 1) {
@@ -570,7 +571,6 @@ bool GS_DECODER::DecodeAttribute(const BASE_NS::vector<uint8_t>& attributeStream
     }
 
     // decode raw data
-    BASE_NS::vector<float> decodedData;
     if (!DecodeRawData(attributeStream, attributeInfo, globalIdx, decodedData)) {
         return false;
     }
