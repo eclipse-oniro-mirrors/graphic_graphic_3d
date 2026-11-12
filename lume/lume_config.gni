@@ -168,9 +168,43 @@ template("lume_binary_complile") {
 template("lume_compile_shader") {
   name = target_name
   action(name) {
-    script = invoker.script
-    outputs = invoker.outputs
+    # Directories are mutated by downstream ROFS/asset generation. Use a
+    # completion marker and track actual shader/include inputs via a depfile.
+    script = "//build/scripts/run_shader_compile.py"
+    not_needed(invoker, [ "outputs" ])
+    outputs = [ "${target_gen_dir}/${target_name}.complete" ]
+    depfile = "${target_gen_dir}/${target_name}.d"
+    inputs = [ invoker.script ]
+    if (defined(invoker.inputs)) {
+      inputs += invoker.inputs
+    }
     args = [
+      "--stamp",
+      rebase_path(outputs[0], root_build_dir),
+      "--depfile",
+      rebase_path(depfile, root_build_dir),
+      "--input-root",
+      invoker.asset_path,
+      "--output-root",
+      rebase_path(invoker.dest_gen_path, root_build_dir),
+    ]
+    foreach(input_file, inputs) {
+      args += [
+        "--input",
+        rebase_path(input_file, root_build_dir),
+      ]
+    }
+    if (defined(invoker.input_roots)) {
+      foreach(input_root, invoker.input_roots) {
+        args += [
+          "--input-root",
+          rebase_path(input_root, root_build_dir),
+        ]
+      }
+    }
+    args += [
+      "--",
+      rebase_path(invoker.script, root_build_dir),
       rebase_path(invoker.dest_gen_path, root_build_dir),
       invoker.asset_path,
       rebase_path(invoker.tool_path, root_build_dir),
@@ -187,4 +221,3 @@ template("lume_compile_shader") {
     }
   }
 }
-
