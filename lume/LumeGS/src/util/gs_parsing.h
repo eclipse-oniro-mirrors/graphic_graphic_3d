@@ -956,7 +956,7 @@ bool ParseGSVertex(const PlyFormatType formatType, const size_t ii, const size_t
     switch (formatType) {
         case PlyFormatType::FullHarmonics:
             return ParseGSFullHarmonics(0, ii, headerEndIdx, plyFileData, loadData, enableScoreCulling, primitive,
-                aabbMin, aabbMax);     
+                aabbMin, aabbMax);
         case PlyFormatType::FullHarmonicsFilterSrParams:
             ParseGSFullHarmonicsWithFilterAndSrParams(0, ii, headerEndIdx, plyFileData, loadData,
                 enableScoreCulling, primitive, aabbMin, aabbMax);
