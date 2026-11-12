@@ -1562,13 +1562,8 @@ void GS::CreateGsRenderDataBuffers(GS::GsRenderData* renderData, const size_t to
     }
 
     // resize index data to match
-    // The first frame is drawn with these indices before sorting completes. Using the identity
-    // order yields an unsorted but complete image; initializing to 0 would make every splat
-    // reference element 0 and produce a degenerate image.
     renderData->gaussianIndices.resize(totalNumberIndexable);
-    for (uint32_t ii = 0; ii < totalNumberIndexable; ii++) {
-        renderData->gaussianIndices[ii] = ii;
-    }
+    std::fill(renderData->gaussianIndices.begin(), renderData->gaussianIndices.end(), 0u);
 
     if (loadCtx.dataStoreGs_->GetGsPrimitives().size() > 0) {
         renderData->gaussianPositions = gaussianPositions;
