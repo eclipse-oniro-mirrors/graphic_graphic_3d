@@ -110,8 +110,8 @@
 constexpr uint32_t GS_MAX_NUM_GS_OBJECTS { 4u };
 constexpr uint32_t GS_MAX_NUM_GS_TEXTURES { 60u };  // should be 15 * GS_MAX_NUM_GS_OBJECTS
 constexpr uint32_t GS_FULL_HARMONICS_HEADER_SIZE { 62u };
-constexpr uint32_t GS_FULL_HARMONICS_FILTER_HEADER_SIZE { 63u }; // +filter_3D (Moblie3DGS3 format)
-constexpr uint32_t GS_FULL_HARMONICS_FILTER_SR_HEADER_SIZE { 66u }; // +filter_3D + sr_params_0/1/2 (lightweight SR)
+constexpr uint32_t GS_FULL_HARMONICS_FILTER_HEADER_SIZE { 63u }; // +filter3D (Moblie3DGS3 format)
+constexpr uint32_t GS_FULL_HARMONICS_FILTER_SR_HEADER_SIZE { 66u }; // +filter3D + sr_params_0/1/2 (lightweight SR)
 constexpr uint32_t GS_RESTRICTED_HARMONICS_HEADER_SIZE { 17u };
 constexpr uint32_t GS_RESTRICTED_HARMONICS_HEADER_SIZE_MINIMAL { 14u };
 constexpr uint32_t GS_PACKED_HEADER_SIZE { 4u };

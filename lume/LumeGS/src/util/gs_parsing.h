@@ -790,8 +790,8 @@ inline float SanitizeFilter3D(const float filter3D)
     return filter3D;
 }
 
-// Parse a PLY vertex in the FullHarmonics + filter_3D + sr_params format
-// (66 perperties). Same as ParseGSFullHarmonics plus filter_3D (astcOffset.z)
+// Parse a PLY vertex in the FullHarmonics + filter3D + sr_params format
+// (66 perperties). Same as ParseGSFullHarmonics plus filter3D (astcOffset.z)
 // and sr_params (loadData->srParams). Used by the lightweight SR pipeline
 void ParseGSFullHarmonicsWithFilterAndSrParams(const size_t baseOffset, const size_t ii, const size_t headerEndIdx,
     uint8_t* plyFileData, GS::GsObjectLoadDataExt* loadData, bool enableScoreCulling, GS::GsPrimitive& primitive,
@@ -825,9 +825,9 @@ void ParseGSFullHarmonicsWithFilterAndSrParams(const size_t baseOffset, const si
     data.covBColorPacked.w = *reinterpret_cast<float*>(&colorPacked);
     data.positionOpacity = Math::Vec4(Math::Vec3(vertexData.position), opacity);
 
-    // Store filter_3D (Mobile3DGS 3D filtering opacity weight) into astcOffset.z
+    // Store filter3D (Mobile3DGS 3D filtering opacity weight) into astcOffset.z
     // as a float bit-pattern.
-    const float filter3DSanitized = SanitizeFilter3D(vertexData.filter_3D);
+    const float filter3DSanitized = SanitizeFilter3D(vertexData.filter3D);
     data.astcOffsetColor.z = *reinterpret_cast<const uint32_t*>(&filter3DSanitized);
 
     loadData->gaussianPositions[ii] = data.positionOpacity;

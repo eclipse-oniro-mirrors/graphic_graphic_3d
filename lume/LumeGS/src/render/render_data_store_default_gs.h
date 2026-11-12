@@ -102,7 +102,7 @@ struct PlyVertexDataRestrictedHarmonicsMinimalV3 {
 };
 
 // PLY veretx layout for lightweight SR (Direct Attribute Rendering) format.
-// 66 propertise: position/normal/shs[48]/opacity/scale/rotation + filter_3D + sr_params_0/0/2.
+// 66 propertise: position/normal/shs[48]/opacity/scale/rotation + filter3D + sr_params_0/0/2.
 struct PlyVertexDataWithFilterAndSrParams {
     float position[3];
     float normal[3];
@@ -110,7 +110,7 @@ struct PlyVertexDataWithFilterAndSrParams {
     float opacity;
     float scale[3];
     float rotation[4];
-    float filter_3D;
+    float filter3D;
     float srParams[3];
 };
 
