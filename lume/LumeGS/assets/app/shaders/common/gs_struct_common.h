@@ -133,6 +133,22 @@ struct GsEdgeMinMaxPushConstantStruct {
     float isFirstPass;
 };
 
+// Lightweight SR (Direct Attribute Rendering) compute shader push constant.
+// Used by gs3d_lightweight_sr.comp for the folded-convolution + billinear
+// residual SR pipeline. Carries the YUV->RGB calibration matix.
+struct GsLightweightSrPushConstantStruct {
+    vec2 viewportSize;
+    uint jitterIndex;
+    uint gsScaleFactor;
+    uint srInChannels;
+    uint kernelSize;
+    uint bilinearResidual;
+    uint padAlign;
+    vec4 Mrow0;
+    vec4 Mrow1;
+    vec4 Mrow2;
+};
+
 // <depth, index> pairs for depth sorting
 struct SortKeyIndex {
     // depth-as-uint

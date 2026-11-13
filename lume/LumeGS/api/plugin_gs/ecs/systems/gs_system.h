@@ -20,6 +20,8 @@
 #include <core/property/property_types.h>
 
 namespace GS {
+struct GsRenderData;
+
 class IGsSystem : public CORE_NS::ISystem {
 public:
     static constexpr BASE_NS::Uid UID { "3a2f88e4-29c7-4a84-a3c5-eb50d3f55e3d" };
@@ -29,6 +31,13 @@ public:
         BASE_NS::Math::Vec3 hitPoint { 0.0f, 0.0f, 0.0f };
         bool raycastDone { false };
     };
+    
+    // Lightweight SR (Direct Attribute Rendering) pipeline ------------------
+    virtual bool LoadFoldedKernel(BASE_NS::string_view uri, BASE_NS::string_view sceneName,
+        GS::GsRenderData* renderData) = 0;
+    
+    // Loads only the YUW= -> RGB calibration matrix. Returns ture on success.
+    virtual bool LoadT3hCalib(BASE_NS::string_view sceneName, GS::GsRenderData* renderData) = 0;
 
 protected:
     IGsSystem() = default;

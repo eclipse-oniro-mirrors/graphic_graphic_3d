@@ -1,0 +1,162 @@
+#version 460 core
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_ARB_shading_language_420pack : enable
+
+// Lightweight SR compute shader
+
+#include "common/gs_common.h"
+#include "common/gs_struct_common.h"
+
+#define WG    GS_T3H_TGS
+#define TW    (WG + 2)
+#define TH    (WG + 2)
+#define SR_SCALE 4
+
+layout(set = 0, binding = 0, rgba16f) readonly restrict uniform image2D uLrAttrs;
+layout(set = 0, binding = 1, rgba8) readonly restrict uniform image2D uLrColor;
+layout(set = 0, binding = 2, std430) readonly restrict buffer uFoldedKernel {
+    float kernelData[];
+};
+layout(set = 0, binding = 3, rgba8) writeonly restrict uniform image2D uOutColor;
+
+layout(push_constant, std430) uniform uPushConstant {
+    GsLightweightSrPushConstantStruct uPc;
+};
+
+layout(local_size_x = WG, local_size_y = WG, local_size_z = 1) in;
+
+const mediump vec3 CALIB_RGB2YUV_ROW0 = vec3(0.29900455f, 0.58701789f, 0.11399682f);
+const mediump vec3 CALIB_RGB2YUV_ROW1 = vec3(-0.16891220f, -0.33139154f, 0.50036878f);
+const mediump vec3 CALIB_RGB2YUV_ROW2 = vec3(0.50065971f, -0.41925292f, -0.08146261f);
+const mediump float CALIB_RGB2YUV_CONST_Y = -0.00000958f;
+const mediump float CALIB_RGB2YUV_CONST_U =  0.50002673f;
+const mediump float CALIB_RGB2YUV_CONST_V =  0.49999257f;
+
+shared mediump float s_y[TH][TW];
+shared mediump vec2  s_uv[TH][TW];
+shared mediump float s_a[TH][TW]; // Cache the lR alpha for bilinear interpolation of HR subpixels (step 1).
+shared mediump float s_kernel[64]; // SR_SCALE^2 * max(srInChannels) = 16 * 4 = 64
+
+void main()
+{
+    int lx = int(gl_GlobalInvocationID.x);
+    int ly = int(gl_GlobalInvocationID.y);
+    int W = int(uPc.viewportSize.x);
+    int H = int(uPc.viewportSize.y);
+
+    int gxg = int(gl_WorkGroupID.x) * WG;    
+    int gyg = int(gl_WorkGroupID.y) * WG;
+    int li = int(gl_LocalInvocationIndex);
+
+    // ---- Cooperative Y + UV + A tileload: halo of 1 pixel on each side ----
+    for (int idx = li; idx < TW * TH; idx += WG * WG) {
+        int sy = idx / TW;        
+        int sx = idx % TW;
+        int lxClamp = clamp(gxg + sx - 1, 0, W - 1);        
+        int lyClamp = clamp(gyg + sy - 1, 0, H - 1);
+        mediump vec4 lrPx = imageLoad(uLrColor, ivec2(lxClamp, lyClamp));
+        mediump vec3 rgb = (lrPx.a >= (1.0 / 255.0)) ? lrPx.rgb / lrPx.a : vec3(0.0);
+        s_y[sy][sx] = dot(rgb, CALIB_RGB2YUV_ROW0) + CALIB_RGB2YUV_CONST_Y;
+        mediump float u601 = dot(rgb, CALIB_RGB2YUV_ROW1) + CALIB_RGB2YUV_CONST_U;
+        mediump float v601 = dot(rgb, CALIB_RGB2YUV_ROW2) + CALIB_RGB2YUV_CONST_V;
+        s_uv[sy][sx] = vec2(u601, v601);
+        s_a[sy][sx] = lrPx.a;
+    }
+
+    // ---- Cooperative kernel load to shared memory (64 floats, one pass) ----
+    {
+        const uint kTotal = uint(SR_SCALE * SR_SCALE) * uPc.srInChannels * uPc.kernelSize * uPc.kernelSize;
+        for (uint idx = li; idx < kTotal; idx += WG * WG) {
+            s_kernel[idx] = kernelData[idx];
+        }
+    }
+    barrier();
+
+    // ---- Boundary check (after barrier, safe to return) ----
+    if (lx >= W || ly >= H) return;
+
+    int tx = int(gl_LocalInvocationID.x);
+    int ty = int(gl_LocalInvocationID.y);
+    const ivec2 px = ivec2(lx, ly);
+
+    // ----load and un-premultiply SR attributes ----
+    const mediump vec4 attrsAccum = imageLoad(uLrAttrs, px);
+    const mediump float attrWeight = attrsAccum.a;
+    mediump vec3 srAttrs = vec3(0.0);
+    if (attrWeight >= (1.0 / 255.0)) {
+        srAttrs = attrsAccum.rgb / attrWeight;
+    }
+
+    // ---- Form input vector [Y, attr0, attr1, ...] ----
+    const uint inCh = uPc.srInChannels;
+    const uint kSize = uPc.kernelSize;
+
+    // ---- Hoist loop-invariant shared memory reads (same corners for all sub-pixels) ----
+    const mediump float y00 = s_y[ty + 1][tx + 1];
+    const mediump float y10 = s_y[ty + 1][tx + 2];
+    const mediump float y01 = s_y[ty + 2][tx + 1];
+    const mediump float y11 = s_y[ty + 2][tx + 2];
+    const mediump vec2 uv00 = s_uv[ty + 1][tx + 1];
+    const mediump vec2 uv10 = s_uv[ty + 1][tx + 2];
+    const mediump vec2 uv01 = s_uv[ty + 2][tx + 1];
+    const mediump vec2 uv11 = s_uv[ty + 2][tx + 2];
+    const mediump float a00 = s_a[ty + 1][tx + 1];
+    const mediump float a10 = s_a[ty + 1][tx + 2];
+    const mediump float a01 = s_a[ty + 2][tx + 1];
+    const mediump float a11 = s_a[ty + 2][tx + 2];
+
+    mediump float inputChan[4];
+    inputChan[0] = y00;
+    inputChan[1] = srAttrs.x;
+    inputChan[2] = srAttrs.y;
+    inputChan[3] = srAttrs.z;
+
+    // ---- For each of 16 HR sub-pixels: folded conv + bilinear residual + YUV->RGB ----
+    const bool useBilinearResidual = (uPc.bilinearResidual != 0u);
+
+    for (int oc = 0; oc < SR_SCALE * SR_SCALE; ++oc) {
+        int sy = oc / SR_SCALE;
+        int sx = oc % SR_SCALE;
+
+        // Folded convolution (k=1: 1x1, just dot product)
+        highp float ySr = 0.0;
+        {
+            const uint kSq = kSize * kSize;
+            for (uint ic = 0u; ic < inCh; ++ic) {
+                uint kIdx = oc * inCh *kSq + ic * kSq;
+                ySr += s_kernel[kIdx] * inputChan[ic];
+            }
+        }
+
+        // sub_pixel fractional offset (computed once per iteration)
+        const mediump float fx = float(sx) * 0.25 + 0.125;
+        const mediump float fy = float(sy) * 0.25 + 0.125;
+
+        // Bilinear residual: add bilinear-interpolated Y at sub pixel position
+        if (useBilinearResidual) {
+            const mediump float yBilinear = mix(mix(y00, y10, fx), mix(y01, y11, fx), fy);
+            ySr += yBilinear;
+        }
+
+        // UV bilinear interpolation for this HR pixel
+        const mediump vec2 chroma = mix(mix(uv00, uv10, fx), mix(uv01, uv11, fx), fy);
+
+        const mediump float aHr = mix(mix(a00, a10, fx), mix(a01, a11, fx), fy);
+
+        // YUV->RGB (inverse calib matrix from push constant)
+        const mediump float Y = clamp(ySr, 0.0, 1.0);
+        const mediump vec3 yuv = vec3(Y, chroma);
+        const mediump vec3 rgb = vec3(
+            dot(uPc.Mrow0.xyz, yuv) + uPc.Mrow0.w,
+            dot(uPc.Mrow1.xyz, yuv) + uPc.Mrow1.w,
+            dot(uPc.Mrow2.xyz, yuv) + uPc.Mrow2.w
+        );
+        
+        uint ox = uint(SR_SCALE * lx + sx);
+        uint oy = uint(SR_SCALE * ly + sy);
+        // Output must be premultiplied RGB + straight alpha, matching the
+        // default 3DGS path's premultiplied output contract;
+        imageStore(uOutColor, ivec2(int(ox), int(oy)),
+                    vec4(clamp(rgb, 0.0, 1.0) * aHr, aHr));
+    }
+}

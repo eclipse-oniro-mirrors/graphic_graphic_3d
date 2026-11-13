@@ -36,6 +36,13 @@
 namespace GS {
 #endif
 
+#define INIT_REPROJ_DEGREE_THRESHOLD 1.0f
+#define INIT_REPROJ_DISTANCE_THRESHOLD 0.02f
+#define INIT_REPROJ_TIME_THRESHOLD 41.0f
+#define INIT_REPROJ_ALPHA_THRESHOLD 0.2f
+#define INIT_REPROJ_SIZE_THRESHOLD 0.02f
+#define INIT_REPROJ_POTENTIAL_DISCARD_THRESHOLD 0.3f
+
 BEGIN_COMPONENT(IGsComponentManager, GsComponent)
 
     DEFINE_PROPERTY(BASE_NS::string, gsPath, "GS3D Ply or GLB Path", 0, "")
@@ -66,6 +73,12 @@ BEGIN_COMPONENT(IGsComponentManager, GsComponent)
 
     // enable or disable the depth pass. Necessary for hybrid rendering. Incurs a performance penalty.
     DEFINE_PROPERTY(bool, gsEnableDepthPass, "Enable GS depth pass", 0, false)
+
+    // Enanble lightweight neural-network super-resolution pipeline
+    DEFINE_PROPERTY(bool, enableSr, "Enable lightweight super-resolution", 0, true)
+
+    // Optional override for the lightweight SR kernel metadata JSON path.
+    DEFINE_PROPERTY(BASE_NS::string, srKernelPath, "Lightweight SR kernel JSON path (empty=auto)", 0, "")
 
     // enable or disable the use of crop-box
     DEFINE_PROPERTY(bool, gsUseCropBox, "Use GS crop-box", 0, false)

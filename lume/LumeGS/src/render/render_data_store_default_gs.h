@@ -101,6 +101,19 @@ struct PlyVertexDataRestrictedHarmonicsMinimalV3 {
     float shs[3]; // spherical harmonics
 };
 
+// PLY veretx layout for lightweight SR (Direct Attribute Rendering) format.
+// 66 propertise: position/normal/shs[48]/opacity/scale/rotation + filter3D + sr_params_0/0/2.
+struct PlyVertexDataWithFilterAndSrParams {
+    float position[3];
+    float normal[3];
+    float shs[48]; // spherical harmonics
+    float opacity;
+    float scale[3];
+    float rotation[4];
+    float filter3D;
+    float srParams[3];
+};
+
 enum class PlyFormatType {
     Unknown = 0,
     FullHarmonics,                 // position/normal/shs[48]/opacity/scale/rotation
@@ -108,6 +121,7 @@ enum class PlyFormatType {
     RestrictedHarmonicsMinimal,    // position/shs[3]/opacity/scale/rotation
     RestrictedHarmonicsMinimalV2,  // position/scale/shs[3]/opacity/rotation
     RestrictedHarmonicsMinimalV3,  // position/rotation/scale/opacity/shs[3]
+    FullHarmonicsFilterSrParams,   // position/normal/shs[48]/opacity/scale/rotation/filter/srParams[3]
     Packed,                        // compressed
 };
 
@@ -245,6 +259,11 @@ public:
     void DisableUBOCopyFlagForGsModel(const uint32_t gsIdx) override;
     void SetDirtyForGsModel(const uint32_t gsIdx, const bool isDirty) override;
 
+    // Lightweight SR (Direct Attribute Rendering) pipeline runtime flag
+    void SetLightweightSrEnabled(bool enable) override;
+    bool GetLightweightSrEnabled() const override;
+    bool IsLightweightSrActive() const override;
+
     uint32_t GetNumActiveGs() override;
 
     // IRenderDataStore
@@ -304,6 +323,7 @@ public:
 
     // returns a valid data storage for rendering
     GsRenderData* GetGsRenderData() override;
+    const GsRenderData* GetGsRenderData() const override;
 
     GsTilePool* GetTilePool() override;
     void SetTilePoolConfig(uint32_t maxTiles, uint32_t splatsPerTile) override;

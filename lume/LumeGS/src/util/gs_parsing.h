@@ -743,6 +743,108 @@ bool ParseGSFullHarmonics(const size_t baseOffset, const size_t ii, const size_t
     return true;
 }
 
+inline Math::Vec4 NormalizeQuat(Math::Vec4 rotNorm)
+{
+    float len = 0;
+    for (size_t jj = 0; jj < 4u; jj++) {
+        len += rotNorm[jj] * rotNorm[jj];
+    }
+    if (len > Math::EPSILON) {
+        rotNorm /= std::sqrtf(len);
+    } else {
+        rotNorm = Math::Vec4(1.0f, 0.0f, 0.0f, 0.0f);
+    }
+    return rotNorm;
+}
+
+inline void TransposeShCoefficients(const float* shs, float* transposed)
+{
+    BASE_NS::CloneData(transposed, 3u * sizeof(float), shs, 3u * sizeof(float));
+    for (size_t jj = 1u; jj < GS_NUM_HARMONICS; jj++) {
+        transposed[jj * 3u + 0u] = shs[(jj - 1u) + 3u];
+        transposed[jj * 3u + 1u] = shs[(jj - 1u) + GS_NUM_HARMONICS + 2u];
+        transposed[jj * 3u + 2u] = shs[(jj - 1u) + GS_NUM_HARMONICS * 2u + 1u];
+    }
+}
+
+inline void StoreTransposedHarmonics(const float* shs, const size_t ii, GS::GsObjectLoadDataExt* loadData)
+{
+    float shDataTransposed[GS_NUM_HARMONICS * 3u];
+    TransposeShCoefficients(shs, shDataTransposed);
+    GS::GsHarmonicsData hsData;
+    for (size_t jj = 0; jj < GS_HARMONICS_PACKED_SIZE; jj++) {
+        hsData.shCoefficients[jj] = PackHalf2x16(shDataTransposed[jj * 2u], shDataTransposed[jj * 2u + 1u]);
+    }
+    loadData->sphericalHarmonics[ii] = hsData;
+}
+
+// Sanitize: NaN/Inf/negative -> 0, tiny positive -> 1e-4.
+inline float SanitizeFilter3D(const float filter3D)
+{
+    if (!std::isfinite(filter3D) || filter3D < 0.0f) {
+        return 0.0f;
+    }
+    if (filter3D > 0.0f && filter3D < 1e-4f) {
+        return 1e-4f;
+    }
+    return filter3D;
+}
+
+// Parse a PLY vertex in the FullHarmonics + filter3D + sr_params format
+// (66 perperties). Same as ParseGSFullHarmonics plus filter3D (astcOffset.z)
+// and sr_params (loadData->srParams). Used by the lightweight SR pipeline
+bool  ParseGSFullHarmonicsWithFilterAndSrParams(const size_t baseOffset, const size_t ii, const size_t headerEndIdx,
+    uint8_t* plyFileData, GS::GsObjectLoadDataExt* loadData, bool enableScoreCulling, GS::GsPrimitive& primitive,
+    BASE_NS::Math::Vec3& aabbMin, BASE_NS::Math::Vec3& aabbMax)
+{
+    PlyVertexDataWithFilterAndSrParams vertexData;
+    BASE_NS::CloneData(static_cast<void*>(&vertexData), sizeof(PlyVertexDataWithFilterAndSrParams),
+        static_cast<void*>(plyFileData +
+            (headerEndIdx + (ii - baseOffset) * sizeof(PlyVertexDataWithFilterAndSrParams))),
+        sizeof(PlyVertexDataWithFilterAndSrParams));
+    
+    const Math::Vec3 scaleExp =
+        Math::Vec3(std::exp(vertexData.scale[0u]), std::exp(vertexData.scale[1u]), std::exp(vertexData.scale[2u]));
+    const float opacity = 1.0f / (1.0f + std::exp(-vertexData.opacity));
+    const Math::Vec4 rotNorm = NormalizeQuat(Math::Vec4(vertexData.rotation));
+
+    GsObjectLoadData::GsSplatData data;
+
+    aabbMin = Math::min(aabbMin, Math::Vec3(vertexData.position));
+    aabbMax = Math::max(aabbMax, Math::Vec3(vertexData.position));
+
+    PrecomputeCovariances(scaleExp, 1.0f, rotNorm, data.covAScale, data.covBColorPacked);
+
+    const Math::Vec3 color = Math::Vec3(vertexData.shs) * SH_C0 + Math::Vec3(0.5f, 0.5f, 0.5f);
+    uint32_t colorPacked = PackGSColor(color, opacity);
+
+    if (primitive.RequireSH()) {
+        StoreTransposedHarmonics(vertexData.shs, ii, loadData);
+    }
+
+    data.covBColorPacked.w = *reinterpret_cast<float*>(&colorPacked);
+    data.positionOpacity = Math::Vec4(Math::Vec3(vertexData.position), opacity);
+
+    // Store filter3D (Mobile3DGS 3D filtering opacity weight) into astcOffset.z
+    // as a float bit-pattern.
+    const float filter3DSanitized = SanitizeFilter3D(vertexData.filter3D);
+    data.astcOffsetColor.z = *reinterpret_cast<const uint32_t*>(&filter3DSanitized);
+
+    loadData->gaussianPositions[ii] = data.positionOpacity;
+    loadData->gsVerticesData.Set(ii, BASE_NS::move(data));
+    ProcessCullingData(ii, scaleExp, loadData->gaussianMaxScales, enableScoreCulling);
+
+    // Store per-gaussian SR attributes for the lightweight SR pipeline.
+    loadData->srParams[ii] =
+        Math::Vec3(vertexData.srParams[0u], vertexData.srParams[1u], vertexData.srParams[2u]);
+
+    if (vertexData.normal[0u] != 0.0f || vertexData.normal[1u] != 0.0f || vertexData.normal[2u] != 0.0) {
+        CORE_LOG_E("GS header format is invalid: non-zero normals!");
+        return false;
+    }
+    return true;
+}
+
 bool ParseGSRestrictedHarmonics(const size_t baseOffset, const size_t ii, const size_t headerEndIdx,
     uint8_t* plyFileData, GS::GsObjectLoadDataExt* loadData, bool enableScoreCulling, GS::GsPrimitive& primitive,
     BASE_NS::Math::Vec3& aabbMin, BASE_NS::Math::Vec3& aabbMax)
@@ -856,6 +958,9 @@ bool ParseGSVertex(const PlyFormatType formatType, const size_t ii, const size_t
         case PlyFormatType::FullHarmonics:
             return ParseGSFullHarmonics(0, ii, headerEndIdx, plyFileData, loadData, enableScoreCulling, primitive,
                 aabbMin, aabbMax);
+        case PlyFormatType::FullHarmonicsFilterSrParams:
+            return ParseGSFullHarmonicsWithFilterAndSrParams(0, ii, headerEndIdx, plyFileData, loadData,
+                enableScoreCulling, primitive, aabbMin, aabbMax);
         case PlyFormatType::RestrictedHarmonicsMinimal:
             ParseGSRestrictedHarmonicsMinimal<PlyVertexDataRestrictedHarmonicsMinimal>(
                 0, ii, headerEndIdx, plyFileData, loadData, enableScoreCulling, primitive, aabbMin, aabbMax);

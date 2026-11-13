@@ -90,6 +90,9 @@ struct GsObjectLoadDataExt {
     BASE_NS::vector<uint32_t> gaussianIndices;
     BASE_NS::vector<float> splatExtents;
     BASE_NS::vector<float> gaussianMaxScales;
+    
+    // Per-gaussian SR attributes (sr_params_0/1/2) for the lightweight
+    BASE_NS::vector<BASE_NS::Math::Vec3> srParams;
 };
 
 struct GsLoadContext {

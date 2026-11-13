@@ -21,6 +21,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <memory>
 #include <numeric>
 #include <plugin_gs/implementation_uids.h>
@@ -130,6 +131,11 @@ public:
     void OnComponentEvent(
         EventType type, const IComponentManager& componentManager, array_view<const Entity> entities) override;
 
+    // IGsSystem -- Lightweight SR (Direct Attribute Rendering) pipeline.
+    bool LoadFoldedKernel(BASE_NS::string_view uri, BASE_NS::string_view sceneName,
+        GS::GsRenderData* renderData) override;
+    bool LoadT3hCalib(BASE_NS::string_view sceneName, GS::GsRenderData* renderData) override;
+
 private:
     void BuildCpuRaycastAccelerationStructure() const;
 
@@ -141,6 +147,9 @@ private:
     void UpdateAnimationState(const GsConfigurationComponent* gcc, GsRenderData* renderData);
     void UpdateRenderFlags(const GsConfigurationComponent* gcc, GsRenderData* renderData);
     void UpdateConfigurationData();
+
+    // Auto-loads lightweight SR kernel + calibration when enableSr is true.
+    void TryAutoLoadSrData(const GsComponent& dfc, GS::GsRenderData* renderData);
 
     GS::GsLoadContext GetLoadContext();
 
@@ -363,6 +372,10 @@ void GsSystem::Uninitialize()
                 renderData->gaussianRenderTargetDepth1 = {};
                 renderData->sampler = {};
                 renderData->gaussianRenderTargetStatusUbo = {};
+                renderData->lrColorTargetHandle = {};
+                renderData->attrsTargetHandle = {};
+                renderData->srParamsHandle = {};
+                renderData->foldedKernelHandle = {};
             }
 
             renderTargetHostEntity_ = {};
@@ -729,6 +742,10 @@ bool GsSystem::Update(bool frameRenderingQueued, uint64_t time, uint64_t delta)
 
             if (prim.isValid) {
                 prim.gsPath = dfc.first.gsPath;
+                // Auto-load lightweight SR data when enableSr is set.
+                if (dfc.first.enableSr && ctx.tempRenderData) {
+                    TryAutoLoadSrData(dfc.first, ctx.tempRenderData);
+                }
                 // defer the data store add
                 outPrimitives->push_back(BASE_NS::move(prim));
                 CORE_NS::ScopedHandle<GsComponent> writeHandle = gsManager_.Write(dfc.second);
@@ -849,6 +866,32 @@ bool GsSystem::Update(bool frameRenderingQueued, uint64_t time, uint64_t delta)
         // Pass original output resolution to avoid precision loss in target1 creation
         GS::CreateGsRenderTargets(renderData, renderTargetHostEntity_, loadCtx, renderResolutionFromCC_, true);
         previousResolution_ = effectiveRenderSize;
+    }
+
+    // Lightweight SR activation vs. render target state re-sync.
+    if (renderData && dataStoreGs_->IsLightweightSrActive() &&
+        dataStoreGs_->GetGsScaleFactor() != 0xFFFFffffu && EntityUtil::IsValid(renderTargetHostEntity_)) {
+        const bool lrTargetsMissing =
+            !RENDER_NS::RenderHandleUtil::IsValid(renderData->lrColorTargetHandle.GetHandle()) ||
+            !RENDER_NS::RenderHandleUtil::IsValid(renderData->attrsTargetHandle.GetHandle());
+        bool rt0SizeMismatch = false;
+        if (!lrTargetsMissing) {
+            // With lightweight SR active the targets are created at full
+            // resolution (gsScaleFactor skipped, see CreateGsRenderImages).
+            const float upscaleFactor = dataStoreGs_->GetXegUpscaleFactor();
+            const Math::UVec2 expectedRt0Size(static_cast<uint32_t>(ceil(renderResolutionFromCC_.x / upscaleFactor)),
+                static_cast<uint32_t>(ceil(renderResolutionFromCC_.y / upscaleFactor)));
+            const GpuImageDesc rt0Desc = renderContext_->GetDevice()
+                                            .GetGpuResourceManager()
+                                            .GetImageDescriptor(renderData->gaussianRenderTarget0);
+            rt0SizeMismatch = (rt0Desc.width != expectedRt0Size.x) || (rt0Desc.height != expectedRt0Size.y);
+        }
+        if (lrTargetsMissing || rt0SizeMismatch) {
+            CORE_LOG_I("GsSystem: lightweight SR active but render targets out of sync, recreating");
+            RemoveGsRenderTargets(renderData, renderTargetHostEntity_, loadCtx);
+            GS::CreateGsRenderTargets(renderData, renderTargetHostEntity_, loadCtx, renderResolutionFromCC_, true);
+            previousResolution_ = effectiveRenderSize;
+        }
     }
 
     // If render targets were never created (e.g. only GsTilingSystem primitives exist, no GsComponent),
@@ -1085,6 +1128,10 @@ void GsSystem::RemoveGsObject(
         renderData->gaussianRenderTargetDepth1 = {};
         renderData->sampler = {};
         renderData->gaussianRenderTargetStatusUbo = {};
+        renderData->lrColorTargetHandle = {};
+        renderData->attrsTargetHandle = {};
+        renderData->srParamsHandle = {};
+        renderData->foldedKernelHandle = {};
 
         renderTargetHostEntity_ = {};
     }
@@ -1355,6 +1402,243 @@ void GsSystem::OnComponentEvent(
         case EventType::MOVED:
             break;
     }
+}
+
+// Lightweight SR (Direct Attribute Rendering) pipeline runtime API.
+namespace {
+BASE_NS::string ExtractSceneName(BASE_NS::string_view gsPath)
+{
+    if (gsPath.empty()) {
+        return {};
+    }
+    auto slashPos = gsPath.find_last_of('/');
+    BASE_NS::string_view filename =
+        (slashPos != BASE_NS::string_view::npos) ? gsPath.substr(slashPos + 1) : gsPath;
+    auto dotPos = filename.find_last_of('.');
+    if (dotPos != BASE_NS::string_view::npos) {
+        filename = filename.substr(0, dotPos);
+    }
+    BASE_NS::string name(filename);
+    const auto usPos = name.find_last_of('_');
+    if (usPos != BASE_NS::string_view::npos && usPos > 0) {
+        BASE_NS::string_view suffix = BASE_NS::string_view(name).substr(usPos + 1);
+        if (suffix == "50w" || suffix == "100w" || suffix == "200w" || suffix == "sr") {
+            name = name.substr(0, usPos);
+        }
+    }
+    return name;
+}
+
+// Kernel metadata parsed from gs3d_sr_kernel_<scene>.json (see comment block above).
+struct SrKernelMetadata {
+    uint32_t inChannels { 0 };
+    uint32_t kernelSize { 0 };
+    uint32_t srScale { 4u };
+    bool bilinearResidual { true };
+    BASE_NS::string kernelBinName;
+};
+
+// step 1 of LoadFoldedKernel(): reads and validates the kernel metadata JSON.
+bool ReadSrKernelMetadata(IFileManager& fileManager, BASE_NS::string_view uri, BASE_NS::string_view sceneName,
+    SrKernelMetadata& meta)
+{
+    auto jsonFile = fileManager.OpenFile(uri);
+    if (!jsonFile) {
+        CORE_LOG_E("LoadFoldedKernel: failed to open JSON file %s", BASE_NS::string(uri).c_str());
+        return false;
+    }
+    const uint64_t jsonLen = jsonFile->GetLength();
+    BASE_NS::vector<char> jsonBuf(static_cast<size_t>(jsonLen) + 1u, '\0');
+    if (jsonFile->Read(jsonBuf.data(), jsonLen) != jsonLen) {
+        CORE_LOG_E("LoadFoldedKernel: failed to read JSON file");
+        return false;
+    }
+    const json::value parsed = json::parse(jsonBuf.data());
+    if (!parsed) {
+        CORE_LOG_E("LoadFoldedKernel: failed to parse JSON file");
+        return false;
+    }
+
+    const json::value* inChVal = parsed.find("in_channels");
+    const json::value* kSizeVal = parsed.find("kernel_size");
+    const json::value* srScaleVal = parsed.find("sr_scale");
+    const json::value* bilinResVal = parsed.find("bilinear_residual");
+    const json::value* kernelBinVal = parsed.find("kernel_bin");
+
+    if (!inChVal || !inChVal->is_number() || !kSizeVal || !kSizeVal->is_number()) {
+        CORE_LOG_E("LoadFoldedKernel: missing or invalid metadata in JSON");
+        return false;
+    }
+
+    meta.inChannels = inChVal->as_number<uint32_t>();
+    meta.kernelSize = kSizeVal->as_number<uint32_t>();
+    meta.srScale = srScaleVal ? srScaleVal->as_number<uint32_t>() : 4u;
+    meta.bilinearResidual = bilinResVal ? bilinResVal->as_number<bool>() : true;
+    meta.kernelBinName = (kernelBinVal && kernelBinVal->is_string())
+        ? BASE_NS::string(kernelBinVal->string_.data(), kernelBinVal->string_.size())
+        : ("gs3d_sr_kernel_" + BASE_NS::string(sceneName) + ".bin");
+    return true;
+}
+
+// step 2 of LoadFoldedKernel(): reads the kernel binary and validation its size
+// against the metadata. Size validation rejects invalid sr_scale values.
+bool ReadSrKernelBinary(IFileManager& fileManager, const SrKernelMetadata& meta,
+    BASE_NS::vector<uint8_t>& kernelData)
+{
+    const BASE_NS::string kernelBinPath = "OhosRawFile://assets/" + meta.kernelBinName;
+    auto kernelFile = fileManager.OpenFile(kernelBinPath);
+    if (!kernelFile) {
+        CORE_LOG_E("LoadFoldedKernel: failed to open kernel bin '%s'", kernelBinPath.c_str());
+        return false;
+    }
+
+    const uint64_t kernelLen = kernelFile->GetLength();
+    const uint32_t srScaleSq = meta.srScale * meta.srScale;
+    const uint64_t expectedLen = static_cast<uint64_t>(srScaleSq) * meta.inChannels * meta.kernelSize *
+        meta.kernelSize * sizeof(float);
+    if (kernelLen != expectedLen) {
+        CORE_LOG_E("LoadFoldedKernel: kernel size mismatch (got=%llu, expected=%llu)",
+            static_cast<unsigned long long>(kernelLen),
+            static_cast<unsigned long long>(expectedLen));
+        return false;
+    }
+    kernelData.resize(static_cast<size_t>(kernelLen));
+    if (kernelFile->Read(kernelData.data(), kernelLen) != kernelLen) {
+        CORE_LOG_E("LoadFoldedKernel: failed to read kernel bin");
+        return false;
+    }
+    return true;
+}
+
+// step 2 of LoadFoldedKernel(): create the SSBO holding the folded kernel data.
+bool CreateSrKernelSsbo(RENDER_NS::IRenderContext& renderContext, BASE_NS::string_view sceneName,
+    const BASE_NS::array_view<const uint8_t> kernelData, RENDER_NS::RenderHandleReference& outHandle)
+{
+    auto& gpuResourceMgr = renderContext.GetDevice().GetGpuResourceManager();
+    
+    GpuBufferDesc kernelDesc;
+    kernelDesc.usageFlags = BufferUsageFlagBits::CORE_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                            BufferUsageFlagBits::CORE_BUFFER_USAGE_TRANSFER_DST_BIT;
+    kernelDesc.memoryPropertyFlags = MemoryPropertyFlagBits::CORE_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    kernelDesc.engineCreationFlags = EngineBufferCreationFlagBits::CORE_ENGINE_BUFFER_CREATION_DYNAMIC_BARRIERS;
+    kernelDesc.byteSize = static_cast<uint32_t>(kernelData.size());
+
+    outHandle = gpuResourceMgr.Create(
+        BASE_NS::string("GS3DFoldedKernel_") + BASE_NS::string(sceneName), kernelDesc, kernelData);
+
+    if (!RENDER_NS::RenderHandleUtil::IsValid(outHandle.GetHandle())) {
+        CORE_LOG_E("LoadFoldedKernel: failed to create SSBO");
+        return false;
+    }
+    return true;
+}
+} // namespace
+
+void GsSystem::TryAutoLoadSrData(const GsComponent& dfc, GS::GsRenderData* renderData)
+{
+    if (!renderData) {
+        return;
+    }
+    
+    const BASE_NS::string sceneName = ExtractSceneName(dfc.gsPath);
+    if (sceneName.empty()) {
+        CORE_LOG_W("TryAutoLoadSrData: cannot derive scene name from gsPath '%s'; SR disabled", dfc.gsPath.c_str());
+        return;
+    }
+
+    const BASE_NS::string kernelPath = dfc.srKernelPath.empty()
+        ? ("OhosRawFile://assets/gs3d_sr_kernel_" + sceneName + ".json")
+        : BASE_NS::string(dfc.srKernelPath);
+    
+    bool kernelOk = LoadFoldedKernel(kernelPath, sceneName, renderData);
+    if (kernelOk && renderData->srParamsLoaded) {
+        renderData->lightweightSrEnabled = true;
+        CORE_LOG_I("LoadFoldedKernel: lightweight SR armed (scene=%s, calib=BT601-inverse)", sceneName.c_str());
+        return;
+    }
+
+    CORE_LOG_W("TryAutoLoadSrData: lightweight SR failed (scene=%s, params=%s, kernel=%s)",
+        sceneName.c_str(),
+        renderData->srParamsLoaded ? "ok" : "fail",
+        kernelOk ? "ok" : "fail");
+}
+
+bool GsSystem::LoadT3hCalib(BASE_NS::string_view sceneName, GS::GsRenderData* renderData)
+{
+    if (!renderContext_ || !dataStoreGs_) {
+        CORE_LOG_E("LoadT3hCalib: render context or GS data store not ready");
+        return false;
+    }
+
+    auto& fileManager = renderContext_->GetEngine().GetFileManager();
+    const BASE_NS::string calibBinPath = "OhosRawFile://assets/gs3d_t3h_calib_" + BASE_NS::string(sceneName) + ".bin";
+
+    auto calibFile = fileManager.OpenFile(calibBinPath);
+    if (!calibFile) {
+        CORE_LOG_E("LoadT3hCalib: failed to open calib '%s'", calibBinPath.c_str());
+        return false;
+    }
+    const uint64_t calibLen = calibFile->GetLength();
+    constexpr uint64_t expectedCalibLen = 48uLL;
+    if (calibLen != expectedCalibLen) {
+        CORE_LOG_E("LoadT3hCalib: calib size mismatch (got=%llu, expected=%llu)",
+            static_cast<unsigned long long>(calibLen),
+            static_cast<unsigned long long>(expectedCalibLen));
+        return false;
+    }
+    float calibData[12];
+    if (calibFile->Read(calibData, calibLen) != calibLen) {
+        CORE_LOG_E("LoadT3hCalib: failed to read calib bin");
+        return false;
+    }
+    renderData->calibMrow0 = BASE_NS::Math::Vec4(calibData[0], calibData[1], calibData[2], calibData[9]);
+    renderData->calibMrow1 = BASE_NS::Math::Vec4(calibData[3], calibData[4], calibData[5], calibData[10]);
+    renderData->calibMrow2 = BASE_NS::Math::Vec4(calibData[6], calibData[7], calibData[8], calibData[11]);
+    return true;
+}
+
+bool GsSystem::LoadFoldedKernel(BASE_NS::string_view uri, BASE_NS::string_view sceneName,
+    GS::GsRenderData* renderData)
+{
+    if (!renderContext_ || !dataStoreGs_) {
+        CORE_LOG_E("LoadFoldedKernel: render context or GS data store not ready");
+        return false;
+    }
+
+    if (!renderData) {
+        CORE_LOG_E("LoadFoldedKernel: renderData is null");
+        return false;
+    }
+
+    auto& fileManager = renderContext_->GetEngine().GetFileManager();
+
+    // --- 1. Read kernel metadata JSON ---
+    SrKernelMetadata meta;
+    if (!ReadSrKernelMetadata(fileManager, uri, sceneName, meta)) {
+        return false;
+    }
+
+    // --- 2. Read kernel binary data ---
+    BASE_NS::vector<uint8_t> kernelData;
+    if (!ReadSrKernelBinary(fileManager, meta, kernelData)) {
+        return false;
+    }
+
+    // --- 3. Upload kernel data to SSBO ---
+    if (!CreateSrKernelSsbo(*renderContext_, sceneName, kernelData, renderData->foldedKernelHandle)) {
+        return false;
+    }
+
+    // --- 4. Store runtime metadata ---
+    renderData->srInChannels = meta.inChannels;
+    renderData->srKernelSize = meta.kernelSize;
+    renderData->srScale = meta.srScale;
+    renderData->foldedKernelLoaded = true;
+
+    CORE_LOG_I("LoadFoldedKernel: loaded folded kernel for scene '%s' (%u ch, k=%u, %llu bytes, bilinRes=%d)",
+        BASE_NS::string(sceneName).c_str(), meta.inChannels, meta.kernelSize,
+        static_cast<unsigned long long>(kernelData.size()), meta.bilinearResidual ? 1 : 0);
+    return true;
 }
 
 } // namespace

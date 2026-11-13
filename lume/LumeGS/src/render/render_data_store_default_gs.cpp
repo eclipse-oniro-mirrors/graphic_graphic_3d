@@ -209,6 +209,15 @@ GsRenderData* RenderDataStoreDefaultGS::GetGsRenderData()
     }
 }
 
+const GsRenderData* RenderDataStoreDefaultGS::GetGsRenderData() const
+{
+    if (gsRenderDataAccess_.load()) {
+        return gsRenderData1_.get();
+    } else {
+        return gsRenderData0_.get();
+    }
+}
+
 GsRenderData* RenderDataStoreDefaultGS::GetSafeLoadingGsRenderData()
 {
     if (sortThread_.joinable()) {
@@ -757,6 +766,26 @@ void RenderDataStoreDefaultGS::DisableUBOCopyFlagForGsModel(const uint32_t gsIdx
 void RenderDataStoreDefaultGS::SetDirtyForGsModel(const uint32_t gsIdx, const bool isDirty)
 {
     primitives_[gsIdx].isDirty = isDirty;
+}
+
+// Lightweight SR (Direct Attribute Rendering) pipeline runtime flag
+void RenderDataStoreDefaultGS::SetLightweightSrEnabled(bool enable)
+{
+    if (auto* rd = GetGsRenderData()) {
+        rd->lightweightSrEnabled = enable;
+    }
+}
+
+bool RenderDataStoreDefaultGS::GetLightweightSrEnabled() const
+{
+    const auto* rd = GetGsRenderData();
+    return rd && rd->lightweightSrEnabled;
+}
+
+bool RenderDataStoreDefaultGS::IsLightweightSrActive() const
+{
+    const auto* rd = GetGsRenderData();
+    return rd && rd->lightweightSrEnabled && rd->srParamsLoaded && rd->foldedKernelLoaded;
 }
 
 uint32_t RenderDataStoreDefaultGS::GetNumActiveGs()
