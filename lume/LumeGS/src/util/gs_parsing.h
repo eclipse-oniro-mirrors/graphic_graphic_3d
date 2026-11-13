@@ -793,7 +793,7 @@ inline float SanitizeFilter3D(const float filter3D)
 // Parse a PLY vertex in the FullHarmonics + filter3D + sr_params format
 // (66 perperties). Same as ParseGSFullHarmonics plus filter3D (astcOffset.z)
 // and sr_params (loadData->srParams). Used by the lightweight SR pipeline
-void ParseGSFullHarmonicsWithFilterAndSrParams(const size_t baseOffset, const size_t ii, const size_t headerEndIdx,
+bool  ParseGSFullHarmonicsWithFilterAndSrParams(const size_t baseOffset, const size_t ii, const size_t headerEndIdx,
     uint8_t* plyFileData, GS::GsObjectLoadDataExt* loadData, bool enableScoreCulling, GS::GsPrimitive& primitive,
     BASE_NS::Math::Vec3& aabbMin, BASE_NS::Math::Vec3& aabbMax)
 {
@@ -840,8 +840,9 @@ void ParseGSFullHarmonicsWithFilterAndSrParams(const size_t baseOffset, const si
 
     if (vertexData.normal[0u] != 0.0f || vertexData.normal[1u] != 0.0f || vertexData.normal[2u] != 0.0) {
         CORE_LOG_E("GS header format is invalid: non-zero normals!");
-        primitive.isValid = false;
+        return = false;
     }
+    return true;
 }
 
 bool ParseGSRestrictedHarmonics(const size_t baseOffset, const size_t ii, const size_t headerEndIdx,
@@ -958,9 +959,8 @@ bool ParseGSVertex(const PlyFormatType formatType, const size_t ii, const size_t
             return ParseGSFullHarmonics(0, ii, headerEndIdx, plyFileData, loadData, enableScoreCulling, primitive,
                 aabbMin, aabbMax);
         case PlyFormatType::FullHarmonicsFilterSrParams:
-            ParseGSFullHarmonicsWithFilterAndSrParams(0, ii, headerEndIdx, plyFileData, loadData,
+            return ParseGSFullHarmonicsWithFilterAndSrParams(0, ii, headerEndIdx, plyFileData, loadData,
                 enableScoreCulling, primitive, aabbMin, aabbMax);
-            break;
         case PlyFormatType::RestrictedHarmonicsMinimal:
             ParseGSRestrictedHarmonicsMinimal<PlyVertexDataRestrictedHarmonicsMinimal>(
                 0, ii, headerEndIdx, plyFileData, loadData, enableScoreCulling, primitive, aabbMin, aabbMax);
