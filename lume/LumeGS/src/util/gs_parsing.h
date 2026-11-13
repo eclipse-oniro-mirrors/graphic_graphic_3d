@@ -840,7 +840,7 @@ bool  ParseGSFullHarmonicsWithFilterAndSrParams(const size_t baseOffset, const s
 
     if (vertexData.normal[0u] != 0.0f || vertexData.normal[1u] != 0.0f || vertexData.normal[2u] != 0.0) {
         CORE_LOG_E("GS header format is invalid: non-zero normals!");
-        return = false;
+        return false;
     }
     return true;
 }
