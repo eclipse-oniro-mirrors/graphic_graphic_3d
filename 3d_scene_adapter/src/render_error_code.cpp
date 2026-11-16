@@ -21,11 +21,11 @@ const char* ToString(RenderErrorCode code)
 {
     switch (code) {
         case RenderErrorCode::OK:                       return "OK";
-        case RenderErrorCode::INVALID_ARRAY_ELEMENT:    return "Array element violates rules";
-        case RenderErrorCode::INVALID_PARAM:            return "Invalid parameter input";
-        case RenderErrorCode::ENGINE_DESTROYED:         return "Scene has been destroyed";
-        case RenderErrorCode::MEMORY_ALLOC_FAILED:      return "Memory allocation failed";
-        case RenderErrorCode::RESOURCE_DESTROYED:       return "Resource has been destroyed";
+        case RenderErrorCode::PARAM_RANGE_EXCEEDED:     return "Parameter exceeds the allowed range.";
+        case RenderErrorCode::PARAM_MISMATCH:           return "Input parameter type or count mismatch.";
+        case RenderErrorCode::SCENE_DESTROYED:          return "Scene used after destruction.";
+        case RenderErrorCode::MEMORY_ALLOC_FAILED:      return "Memory allocation failed.";
+        case RenderErrorCode::RESOURCE_DESTROYED:       return "Expired or Invalid resource.";
         default:                                        return "Undefined error code";
     }
 }

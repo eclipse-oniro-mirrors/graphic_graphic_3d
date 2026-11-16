@@ -43,14 +43,14 @@ const char* ToString(Code code)
         case ASYNC_INVALID_UID:         return "Invalid UID string";
         case INTERNAL_ERROR:            return "Internal error";
         case TRANSFER_FAILED:           return "Transfer operation failed";
-        case INVALID_ARRAY_ELEMENT:
-            return OHOS::Render3D::ToString(OHOS::Render3D::RenderErrorCode::INVALID_ARRAY_ELEMENT);
-        case INVALID_PARAM:
-            return OHOS::Render3D::ToString(OHOS::Render3D::RenderErrorCode::INVALID_PARAM);
+        case PARAM_RANGE_EXCEEDED:
+            return OHOS::Render3D::ToString(OHOS::Render3D::RenderErrorCode::PARAM_RANGE_EXCEEDED);
+        case PARAM_MISMATCH:
+            return OHOS::Render3D::ToString(OHOS::Render3D::RenderErrorCode::PARAM_MISMATCH);
         case MEMORY_ALLOC_FAILED:
             return OHOS::Render3D::ToString(OHOS::Render3D::RenderErrorCode::MEMORY_ALLOC_FAILED);
-        case ENGINE_DESTROYED:
-            return OHOS::Render3D::ToString(OHOS::Render3D::RenderErrorCode::ENGINE_DESTROYED);
+        case SCENE_DESTROYED:
+            return OHOS::Render3D::ToString(OHOS::Render3D::RenderErrorCode::SCENE_DESTROYED);
         case RESOURCE_DESTROYED:
             return OHOS::Render3D::ToString(OHOS::Render3D::RenderErrorCode::RESOURCE_DESTROYED);
         default:                        return "Undefined error code";

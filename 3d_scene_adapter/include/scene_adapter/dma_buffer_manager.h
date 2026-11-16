@@ -41,7 +41,10 @@ public:
     // Called when a DMA buffer is freed (PixelMap destroyed via custom deleter).
     void ReleaseQuota(size_t bytes)
     {
-        currentUsage_.fetch_sub(bytes, std::memory_order_relaxed);
+        size_t prev = currentUsage_.fetch_sub(bytes, std::memory_order_relaxed);
+        if (prev < bytes) {
+            currentUsage_.store(0, std::memory_order_relaxed);
+        }
     }
 
     size_t GetCurrentUsage() const

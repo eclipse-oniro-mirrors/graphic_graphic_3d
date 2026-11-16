@@ -178,6 +178,7 @@ protected:
     SurfaceBufferInfo sfBufferInfo_;
 
     std::atomic<bool> snapshotRequested_{false};
+    std::atomic<bool> engineValid_{true};
     SnapshotRequest snapshotRequest_;
     META_NS::Future<int> pendingSnapshot_;
     int32_t snapshotErrorCode_ = 0;

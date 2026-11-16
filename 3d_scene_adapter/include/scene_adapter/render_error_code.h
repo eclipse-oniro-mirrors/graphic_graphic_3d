@@ -23,11 +23,11 @@ namespace OHOS::Render3D {
 // Render error codes shared between scene_adapter (producer) and kits (consumer).
 enum class RenderErrorCode : int32_t {
     OK                       = 0,
-    INVALID_ARRAY_ELEMENT    = 25603001,  // Elements within a single array violate rules
-    INVALID_PARAM            = 25603002,  // Function input parameters do not meet constraints
-    ENGINE_DESTROYED         = 25601002,  // Scene has been destroyed, api called after destruction
-    MEMORY_ALLOC_FAILED      = 25601004,  // Memory allocation failed
-    RESOURCE_DESTROYED       = 25601006,  // Resource has been destroyed, api called after destruction
+    SCENE_DESTROYED          = 25601002,  // Scene used after destruction
+    MEMORY_ALLOC_FAILED      = 25601005,  // Memory allocation failed
+    RESOURCE_DESTROYED       = 25601006,  // Expired or invalid resource
+    PARAM_RANGE_EXCEEDED     = 25603001,  // Elements within a single array violate rules
+    PARAM_MISMATCH           = 25603002,  // Function input parameters do not meet constraints
 };
 
 const char* ToString(RenderErrorCode code);
