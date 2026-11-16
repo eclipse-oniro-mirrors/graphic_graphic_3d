@@ -811,9 +811,23 @@ void SceneAdapter::RenderFunction()
     RETURN_IF_NULL(scene);
     BASE_NS::vector<SCENE_NS::ICamera::Ptr> disabledCameras;
     auto cams = scene->GetCameras().GetResult();
+    bool doSnapshot = snapshotRequested_.load();
 
     for (auto c : cams) {
-        if (!bitmap_ && c->IsActive()) {
+        if (!c->IsActive()) {
+            continue;
+        }
+        bool isMain = (c->SceneFlags()->GetValue() & uint32_t(SCENE_NS::CameraSceneFlag::MAIN_CAMERA_BIT));
+        bool isSnapshotCam = false;
+        if (doSnapshot) {
+            for (const auto& sc : snapshotRequest_.cameras) {
+                if (sc == c) {
+                    isSnapshotCam = true;
+                    break;
+                }
+            }
+        }
+        if (!bitmap_ || (!isMain && !isSnapshotCam)) {
             c->SetActive(false);
             disabledCameras.push_back(c);
         }
@@ -855,7 +869,6 @@ void SceneAdapter::RenderFunction()
         AttachSwapchain(interface_pointer_cast<META_NS::IObject>(c));
     }
 
-    bool doSnapshot = snapshotRequested_.load();
     bool skipFirstRender = (doSnapshot && !bitmap_ && activeCameraCount == 0);
 
     if (doSnapshot) {
@@ -888,7 +901,7 @@ void SceneAdapter::RenderFunction()
             const uint32_t dropped = sceneUtil.GetDroppedCameraCount(*ecs);
             if (dropped > 0) {
                 WIDGET_LOGE("snapshot: %u cameras dropped, snapshot aborted", dropped);
-                snapshotErrorCode_ = static_cast<int32_t>(RenderErrorCode::INVALID_ARRAY_ELEMENT);
+                snapshotErrorCode_ = static_cast<int32_t>(RenderErrorCode::PARAM_RANGE_EXCEEDED);
                 currentSnapshotData_.clear();
                 DeliverSnapshot();
                 doSnapshot = false;
@@ -1144,7 +1157,7 @@ void SceneAdapter::SetSnapshotRequest(SnapshotRequest request)
                 auto mainCamera = GetMainCamera();
                 for (const auto& cam : snapshotRequest_.cameras) {
                     if (cam == mainCamera) {
-                        rejectWith(RenderErrorCode::INVALID_ARRAY_ELEMENT, "on-screen main camera in snapshot cameras");
+                        rejectWith(RenderErrorCode::PARAM_RANGE_EXCEEDED, "on-screen main camera in snapshot cameras");
                         return 0;
                     }
                 }
@@ -1269,16 +1282,28 @@ BASE_NS::shared_ptr<OffscreenCaptureData> SceneAdapter::CreateOffscreenRenderTar
     imageDesc.layerCount = 1u;
     imageDesc.sampleCountFlags = RENDER_NS::SampleCountFlagBits::CORE_SAMPLE_COUNT_1_BIT;
 
-    RENDER_NS::ImageDescVk platDesc;
-    platDesc.image = VK_NULL_HANDLE;
-    platDesc.imageView = VK_NULL_HANDLE;
-    platDesc.platformHwBuffer = reinterpret_cast<uintptr_t>(nativeBuffer);
-    platDesc.isFormatEffectivelySet = true;
-
-    data->gpuImageHandle = gpuResourceMgr.CreateView("OffscreenRT_" + BASE_NS::to_string(index), imageDesc, platDesc);
+    auto backendType = rc->GetDevice().GetBackendType();
+    if (backendType == RENDER_NS::DeviceBackendType::VULKAN) {
+        RENDER_NS::ImageDescVk platDesc;
+        platDesc.image = VK_NULL_HANDLE;
+        platDesc.imageView = VK_NULL_HANDLE;
+        platDesc.platformHwBuffer = reinterpret_cast<uintptr_t>(nativeBuffer);
+        platDesc.isFormatEffectivelySet = true;
+        data->gpuImageHandle =
+            gpuResourceMgr.CreateView("OffscreenRT_" + BASE_NS::to_string(index), imageDesc, platDesc);
+    } else if (backendType == RENDER_NS::DeviceBackendType::OPENGLES) {
+        RENDER_NS::ImageDescGLES platDesc;
+        platDesc.type = GL_TEXTURE_EXTERNAL_OES;
+        platDesc.platformHwBuffer = reinterpret_cast<uintptr_t>(nativeBuffer);
+        data->gpuImageHandle =
+            gpuResourceMgr.CreateView("OffscreenRT_" + BASE_NS::to_string(index), imageDesc, platDesc);
+    } else {
+        WIDGET_LOGE(
+            "snapshot: CreateOffscreenRenderTarget: unsupported backend type %d", static_cast<int>(backendType));
+    }
+    
     if (!data->gpuImageHandle) {
         WIDGET_LOGE("snapshot: CreateOffscreenRenderTarget: CreateView failed");
-        DmaBufferManager::GetInstance().ReleaseQuota(actualSize);
         return nullptr;
     }
 
@@ -1288,7 +1313,6 @@ BASE_NS::shared_ptr<OffscreenCaptureData> SceneAdapter::CreateOffscreenRenderTar
     data->engineBitmap = obr.Create<SCENE_NS::IRenderTarget>(SCENE_NS::ClassId::Bitmap, doc);
     if (!data->engineBitmap) {
         WIDGET_LOGE("snapshot: CreateOffscreenRenderTarget: obr.Create IRenderTarget failed");
-        DmaBufferManager::GetInstance().ReleaseQuota(actualSize);
         return nullptr;
     }
     if (auto renderResource = interface_cast<SCENE_NS::IRenderResource>(data->engineBitmap)) {

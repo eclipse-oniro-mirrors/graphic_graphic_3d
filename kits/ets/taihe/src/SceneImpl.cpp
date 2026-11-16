@@ -81,14 +81,14 @@ bool SceneImpl::renderFrame(::taihe::optional_view<::SceneTH::RenderParameters> 
     if (cameras.size() != params.size()) {
         WIDGET_LOGE("snapshot: cameras.size(%zu) != params.size(%zu)", cameras.size(), params.size());
         completer.complete(taihe::unexpected(taihe::error(
-            NapiErrorUtil::ToString(ErrorCode::INVALID_PARAM), static_cast<int32_t>(ErrorCode::INVALID_PARAM))));
+            NapiErrorUtil::ToString(ErrorCode::PARAM_MISMATCH), static_cast<int32_t>(ErrorCode::PARAM_MISMATCH))));
         return std::move(future);
     }
 
     if (cameras.empty() || params.empty()) {
         WIDGET_LOGE("snapshot: cameras or params is empty");
-        completer.complete(taihe::unexpected(taihe::error(NapiErrorUtil::ToString(ErrorCode::INVALID_ARRAY_ELEMENT),
-            static_cast<int32_t>(ErrorCode::INVALID_ARRAY_ELEMENT))));
+        completer.complete(taihe::unexpected(taihe::error(NapiErrorUtil::ToString(ErrorCode::PARAM_RANGE_EXCEEDED),
+            static_cast<int32_t>(ErrorCode::PARAM_RANGE_EXCEEDED))));
         return std::move(future);
     }
 
@@ -121,8 +121,8 @@ bool SceneImpl::renderFrame(::taihe::optional_view<::SceneTH::RenderParameters> 
         double y = sz->getY();
         if (x <= 0.0 || y <= 0.0) {
             WIDGET_LOGE("snapshot: invalid size [%zu] x=%f y=%f", i, x, y);
-            completer.complete(taihe::unexpected(taihe::error(NapiErrorUtil::ToString(ErrorCode::INVALID_ARRAY_ELEMENT),
-                static_cast<int32_t>(ErrorCode::INVALID_ARRAY_ELEMENT))));
+            completer.complete(taihe::unexpected(taihe::error(NapiErrorUtil::ToString(ErrorCode::PARAM_RANGE_EXCEEDED),
+                static_cast<int32_t>(ErrorCode::PARAM_RANGE_EXCEEDED))));
             return std::move(future);
         }
         sizes.push_back(BASE_NS::Math::UVec2(static_cast<uint32_t>(x), static_cast<uint32_t>(y)));
@@ -134,8 +134,8 @@ bool SceneImpl::renderFrame(::taihe::optional_view<::SceneTH::RenderParameters> 
             if (nativeCameras[i].get() == nativeCameras[j].get()) {
                 WIDGET_LOGE("snapshot: duplicate camera");
                 completer.complete(
-                    taihe::unexpected(taihe::error(NapiErrorUtil::ToString(ErrorCode::INVALID_ARRAY_ELEMENT),
-                        static_cast<int32_t>(ErrorCode::INVALID_ARRAY_ELEMENT))));
+                    taihe::unexpected(taihe::error(NapiErrorUtil::ToString(ErrorCode::PARAM_RANGE_EXCEEDED),
+                        static_cast<int32_t>(ErrorCode::PARAM_RANGE_EXCEEDED))));
                 return std::move(future);
             }
         }
@@ -143,8 +143,8 @@ bool SceneImpl::renderFrame(::taihe::optional_view<::SceneTH::RenderParameters> 
 
     if (!sceneETS_) {
         WIDGET_LOGE("snapshot: sceneETS_ is null");
-        completer.complete(taihe::unexpected(taihe::error(NapiErrorUtil::ToString(ErrorCode::ENGINE_DESTROYED),
-            static_cast<int32_t>(ErrorCode::ENGINE_DESTROYED))));
+        completer.complete(taihe::unexpected(taihe::error(NapiErrorUtil::ToString(ErrorCode::SCENE_DESTROYED),
+            static_cast<int32_t>(ErrorCode::SCENE_DESTROYED))));
         return std::move(future);
     }
 

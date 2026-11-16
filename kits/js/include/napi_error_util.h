@@ -60,9 +60,9 @@ enum Code : int32_t {
 
     TRANSFER_FAILED            = 80001,
 
-    INVALID_ARRAY_ELEMENT      = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::INVALID_ARRAY_ELEMENT),
-    INVALID_PARAM              = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::INVALID_PARAM),
-    ENGINE_DESTROYED           = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::ENGINE_DESTROYED),
+    PARAM_RANGE_EXCEEDED       = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::PARAM_RANGE_EXCEEDED),
+    PARAM_MISMATCH             = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::PARAM_MISMATCH),
+    SCENE_DESTROYED            = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::SCENE_DESTROYED),
     MEMORY_ALLOC_FAILED        = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::MEMORY_ALLOC_FAILED),
     RESOURCE_DESTROYED         = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::RESOURCE_DESTROYED),
 };

@@ -973,12 +973,12 @@ napi_value SceneJS::Snapshot(NapiApi::FunctionContext<>& ctx)
 
     if (camerasLen != paramsLen) {
         WIDGET_LOGE("snapshot: camerasLen(%u) != paramsLen(%u)", camerasLen, paramsLen);
-        return promise.Reject(NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::INVALID_PARAM, nullptr));
+        return promise.Reject(NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::PARAM_MISMATCH, nullptr));
     }
 
     if (camerasLen == 0 || paramsLen == 0) {
         WIDGET_LOGE("snapshot: cameras or params is empty");
-        return promise.Reject(NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::INVALID_ARRAY_ELEMENT, nullptr));
+        return promise.Reject(NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::PARAM_RANGE_EXCEEDED, nullptr));
     }
 
     OHOS::Render3D::SnapshotRequest request;
@@ -1034,7 +1034,7 @@ napi_value SceneJS::Snapshot(NapiApi::FunctionContext<>& ctx)
             if (xD <= 0.0 || yD <= 0.0) {
                 WIDGET_LOGE("snapshot: invalid size [%u] x=%f y=%f", i, xD, yD);
                 return promise.Reject(NapiErrorUtil::MakeErrorObject(env,
-                    NapiErrorUtil::INVALID_ARRAY_ELEMENT, nullptr));
+                    NapiErrorUtil::PARAM_RANGE_EXCEEDED, nullptr));
             }
             w = static_cast<uint32_t>(xD);
             h = static_cast<uint32_t>(yD);
@@ -1048,7 +1048,7 @@ napi_value SceneJS::Snapshot(NapiApi::FunctionContext<>& ctx)
             if (request.cameras[i].get() == request.cameras[j].get()) {
                 WIDGET_LOGE("snapshot duplicate camera");
                 return promise.Reject(
-                    NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::INVALID_ARRAY_ELEMENT, nullptr));
+                    NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::PARAM_RANGE_EXCEEDED, nullptr));
             }
         }
     }
@@ -1105,7 +1105,7 @@ napi_value SceneJS::Snapshot(NapiApi::FunctionContext<>& ctx)
     auto sceneAdapter = std::static_pointer_cast<OHOS::Render3D::SceneAdapter>(scene_);
     if (!sceneAdapter) {
         WIDGET_LOGE("snapshot: sceneAdapter is null");
-        return promise.Reject(NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::ENGINE_DESTROYED, nullptr));
+        return promise.Reject(NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::SCENE_DESTROYED, nullptr));
     }
 
     sceneAdapter->RequestSnapshot(std::move(request));
