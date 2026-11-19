@@ -327,6 +327,63 @@ UNIT_TEST(API_RenderDataStoreDefaultLight, ShadowAtlasOverflowClearsShadowBit, t
 }
 
 /**
+ * @tc.name: ShadowAtlasWidthLimitsShadowCount
+ * @tc.desc: The atlas is a single horizontal row of tiles, so a tile size past a fraction of the atlas width lowers the
+ *           shadow count below MAX_SHADOW_COUNT. Past that count the shadow usage bit is cleared, exactly as when the
+ *           count limit is hit.
+ * @tc.type: FUNC
+ */
+UNIT_TEST(API_RenderDataStoreDefaultLight, ShadowAtlasWidthLimitsShadowCount, testing::ext::TestSize.Level1)
+{
+    UTest::TestContext* testContext = UTest::GetTestContext();
+    auto renderContext = testContext->renderContext;
+
+    auto& dsManager = renderContext->GetRenderDataStoreManager();
+    constexpr BASE_NS::string_view dataStoreName = "DataStoreDefaultLightShadowAtlasWidth";
+    auto dataStore = dsManager.Create(IRenderDataStoreDefaultLight::UID, dataStoreName.data());
+    ASSERT_TRUE(dataStore);
+    auto dataStoreDefaultLight = static_cast<IRenderDataStoreDefaultLight*>(dataStore.get());
+
+    constexpr uint32_t shadowResolution = 4096U;
+    IRenderDataStoreDefaultLight::ShadowQualityResolutions resolutions;
+    resolutions.low = {shadowResolution, shadowResolution};
+    resolutions.normal = {shadowResolution, shadowResolution};
+    resolutions.high = {shadowResolution, shadowResolution};
+    resolutions.ultra = {shadowResolution, shadowResolution};
+    dataStoreDefaultLight->SetShadowQualityResolutions(resolutions, 0u);
+
+    constexpr uint32_t maxShadowCount = DefaultMaterialLightingConstants::MAX_SHADOW_ATLAS_WIDTH / shadowResolution;
+    ASSERT_LT(maxShadowCount, DefaultMaterialLightingConstants::MAX_SHADOW_COUNT);
+    constexpr uint32_t shadowLightCount = maxShadowCount + 1U;
+    for (uint32_t i = 0; i < shadowLightCount; ++i) {
+        RenderLight light;
+        light.color = {1.0f, 1.0f, 1.0f, 1.0f};
+        light.lightUsageFlags =
+            RenderLight::LIGHT_USAGE_DIRECTIONAL_LIGHT_BIT | RenderLight::LIGHT_USAGE_SHADOW_LIGHT_BIT;
+        light.id = i;
+        dataStoreDefaultLight->AddLight(light);
+    }
+
+    auto lights = dataStoreDefaultLight->GetLights();
+    ASSERT_EQ(shadowLightCount, lights.size());  // lights are kept, only their shadow is dropped
+    uint32_t shadowLights = 0u;
+    for (const auto& light : lights) {
+        if (light.lightUsageFlags & RenderLight::LIGHT_USAGE_SHADOW_LIGHT_BIT) {
+            // slots are handed out in order, so the retained shadows take the first ones
+            EXPECT_EQ(shadowLights, light.shadowIndex);
+            ++shadowLights;
+        }
+    }
+    EXPECT_EQ(maxShadowCount, shadowLights);
+    EXPECT_EQ(maxShadowCount, dataStoreDefaultLight->GetLightCounts().shadowCount);
+
+    // Destruction is deferred
+    dataStore.reset();
+    renderContext->GetRenderer().RenderFrame({});
+    EXPECT_FALSE(dsManager.GetRenderDataStore(dataStoreName));
+}
+
+/**
  * @tc.name: ShadowQuaityResolutionTest
  * @tc.desc: Tests for Shadow Quaity Resolution Test. [AUTO-GENERATED]
  * @tc.type: FUNC

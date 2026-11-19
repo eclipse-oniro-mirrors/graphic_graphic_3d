@@ -123,7 +123,12 @@ void RenderDataStoreDefaultLight::AddLight(const RenderLight& light)
     }
     if (renderLight.lightUsageFlags & RenderLight::LIGHT_USAGE_SHADOW_LIGHT_BIT) {
         const uint32_t shadowCount = lightCounts_.dirShadow + lightCounts_.spotShadow;
-        if (shadowCount < DefaultMaterialLightingConstants::MAX_SHADOW_COUNT) {
+        // The atlas is a single horizontal row of tiles, so its width caps the shadow count as well.
+        const Math::UVec2 shadowResolution = GetShadowQualityResolution();
+        const uint32_t maxShadowCount = Math::min(DefaultMaterialLightingConstants::MAX_SHADOW_COUNT,
+            Math::max(
+                1u, DefaultMaterialLightingConstants::MAX_SHADOW_ATLAS_WIDTH / Math::max(1u, shadowResolution.x)));
+        if (shadowCount < maxShadowCount) {
             if (renderLight.lightUsageFlags & RenderLight::LIGHT_USAGE_DIRECTIONAL_LIGHT_BIT) {
                 lightCounts_.dirShadow++;
             } else if (renderLight.lightUsageFlags & RenderLight::LIGHT_USAGE_SPOT_LIGHT_BIT) {

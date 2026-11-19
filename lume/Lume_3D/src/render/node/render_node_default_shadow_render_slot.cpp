@@ -58,7 +58,6 @@ namespace {
 constexpr DynamicStateEnum DYNAMIC_STATES[] = {CORE_DYNAMIC_STATE_ENUM_VIEWPORT, CORE_DYNAMIC_STATE_ENUM_SCISSOR};
 
 static constexpr uint32_t UBO_OFFSET_ALIGNMENT{256u};
-static constexpr uint32_t MAX_SHADOW_ATLAS_WIDTH{8192u};
 
 inline uint64_t HashShaderAndSubmesh(
     const uint64_t shaderDataHash, const uint32_t renderHash, const GraphicsState::InputAssembly& ia)
@@ -264,7 +263,8 @@ void RenderNodeDefaultShadowRenderSlot::PreExecuteFrame()
     auto& gpuResourceMgr = renderNodeContextMgr_->GetGpuResourceManager();
     const IRenderDataStoreDefaultLight::ShadowTypes shadowTypes = dataStoreLight->GetShadowTypes();
     if (shadowCount_ > 0) {
-        const uint32_t xWidth = Math::min(res.x * shadowCount_, MAX_SHADOW_ATLAS_WIDTH);
+        const uint32_t xWidth =
+            Math::min(res.x * shadowCount_, DefaultMaterialLightingConstants::MAX_SHADOW_ATLAS_WIDTH);
         const uint32_t yHeight = res.y;
         const bool xChanged = (xWidth != shadowBuffers_.width);
         const bool yChanged = (yHeight != shadowBuffers_.height);
