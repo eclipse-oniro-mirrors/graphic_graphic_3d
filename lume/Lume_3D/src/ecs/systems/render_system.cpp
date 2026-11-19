@@ -2601,8 +2601,16 @@ void RenderSystem::ProcessLight(const LightProcessData& lpd)
 
     light.sceneId = lpd.sceneId;
     if (lc.shadowEnabled) {
-        light.shadowFactors = {Math::clamp01(lc.shadowStrength), lc.shadowDepthBias, lc.shadowNormalBias, 0.0f};
-        ProcessShadowCamera(lpd, light);
+        // The atlas is a single horizontal row of tiles, so its width caps the shadow count as well. A shadow past the
+        // cap is dropped anyway, do not reserve a camera slot for it.
+        const Math::UVec2 shadowResolution = dsLight_->GetShadowQualityResolution();
+        const uint32_t maxShadowCount = Math::min(DefaultMaterialLightingConstants::MAX_SHADOW_COUNT,
+            Math::max(
+                1u, DefaultMaterialLightingConstants::MAX_SHADOW_ATLAS_WIDTH / Math::max(1u, shadowResolution.x)));
+        if (dsLight_->GetLightCounts().shadowCount < maxShadowCount) {
+            light.shadowFactors = {Math::clamp01(lc.shadowStrength), lc.shadowDepthBias, lc.shadowNormalBias, 0.0f};
+            ProcessShadowCamera(lpd, light);
+        }
     }
 
     dsLight_->AddLight(light);

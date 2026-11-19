@@ -39,6 +39,8 @@ struct DefaultMaterialLightingConstants {
     static constexpr uint32_t MAX_LIGHT_COUNT{64};
     /** Max shadow count */
     static constexpr uint32_t MAX_SHADOW_COUNT{8u};
+    /** Max shadow atlas width. The atlas is a single horizontal row of shadow map tiles. */
+    static constexpr uint32_t MAX_SHADOW_ATLAS_WIDTH{8192u};
 
     /** Light data buffer name. Default material pipelines uses per camera ligh buffers */
     static constexpr const BASE_NS::string_view LIGHT_DATA_BUFFER_NAME{"CORE3D_DM_LIGHT_DATA_BUFFER"};
