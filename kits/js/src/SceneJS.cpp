@@ -945,6 +945,12 @@ napi_value SceneJS::Snapshot(NapiApi::FunctionContext<>& ctx)
     const auto env = ctx.GetEnv();
     auto promise = Promise(env);
 
+#if defined(IS_EMULATOR)
+    WIDGET_LOGE("snapshot: offscreen DMA readback is not supported on the emulator");
+    return promise.Reject(
+        NapiErrorUtil::MakeErrorObject(env, NapiErrorUtil::EMULATOR_CAPABILITY_NOT_SUPPORTED, nullptr));
+#endif
+
 #ifdef __SCENE_ADAPTER__
     if (ctx.ArgCount() < SNAPSHOT_ARG_COUNT) {
         WIDGET_LOGE("snapshot: arg count < %zu", SNAPSHOT_ARG_COUNT);

@@ -93,6 +93,10 @@ config("napi_config") {
     ]
   }
 
+  if (is_emulator){
+    defines += ["IS_EMULATOR"]
+  }
+  
   include_dirs = [
     "include",
     "include/napi",
