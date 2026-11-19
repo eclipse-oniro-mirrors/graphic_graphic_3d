@@ -145,6 +145,7 @@ ohos_source_set("scene_adapter_source") {
     "bundle_framework:appexecfwk_base",
     "bundle_framework:appexecfwk_core",
     "c_utils:utils",
+    "bounds_checking_function:libsec_shared",
     "graphic_2d:EGL",
     "graphic_2d:GLESv3",
     "graphic_2d:librender_service_base",

@@ -70,6 +70,7 @@ ohos_fuzztest("LoadGsSceneFuzzTest") {
 
   external_deps = [
     "c_utils:utils",
+    "bounds_checking_function:libsec_shared",
     "hilog:libhilog",
   ]
 
@@ -80,9 +81,12 @@ ohos_fuzztest("LoadGsSceneFuzzTest") {
 ###############################################################################
 group("fuzztest") {
   testonly = true
-  deps = [
-    # deps file
-    ":LoadGsSceneFuzzTest",
-  ]
+  deps = []
+  if (target_cpu == "arm64") {
+    deps += [
+      # deps file
+      ":LoadGsSceneFuzzTest",
+    ]
+  }
 }
 ###############################################################################

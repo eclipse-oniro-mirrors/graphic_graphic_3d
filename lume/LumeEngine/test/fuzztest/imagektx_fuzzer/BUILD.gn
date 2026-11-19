@@ -50,6 +50,7 @@ ohos_fuzztest("ImageKtxFuzzTest") {
 
   external_deps = [
     "c_utils:utils",
+    "bounds_checking_function:libsec_shared",
     "hilog:libhilog",
   ]
 

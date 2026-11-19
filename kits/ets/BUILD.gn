@@ -271,6 +271,7 @@ taihe_shared_library("scene_ani") {
 
   external_deps = [
     "c_utils:utils",
+    "bounds_checking_function:libsec_shared",
     "graphic_2d:EGL",
     "graphic_2d:GLESv3",
     "graphic_surface:surface",
