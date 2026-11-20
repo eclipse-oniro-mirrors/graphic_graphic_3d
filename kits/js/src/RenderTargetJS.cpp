@@ -20,6 +20,7 @@
 #include "Promise.h"
 #include "napi_error_util.h"
 #include "pixel_map_napi.h"
+#include "3d_widget_adapter_log.h"
 
 #include <scene/interface/intf_render_target.h>
 #include <scene/interface/intf_scene.h>
@@ -106,6 +107,12 @@ napi_value RenderTargetJS::GetPixelMap(NapiApi::FunctionContext<>& ctx)
 {
     auto env = ctx.GetEnv();
     auto promise = Promise(env);
+
+#if defined(IS_EMULATOR)
+    WIDGET_LOGE("getPixelMap: offscreen DMA readback is not supported on the emulator");
+    promise.Reject(MakeErrorObject(env, NapiErrorUtil::EMULATOR_CAPABILITY_NOT_SUPPORTED, nullptr));
+    return promise;
+#endif
 
     if (!captureData_) {
         promise.Reject(MakeErrorObject(env, NapiErrorUtil::RESOURCE_DESTROYED, nullptr));

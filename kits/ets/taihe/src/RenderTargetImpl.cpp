@@ -91,6 +91,11 @@ int32_t RenderTargetImpl::getHeight()
 
 uintptr_t RenderTargetImpl::getPixelMapSync()
 {
+#if defined(IS_EMULATOR)
+    WIDGET_LOGE("getPixelMap: offscreen DMA readback is not supported on the emulator");
+    SetBusinessError(ErrorCode::EMULATOR_CAPABILITY_NOT_SUPPORTED, nullptr);
+    return 0;
+#endif
     if (!rtETS_) {
         SetBusinessError(ErrorCode::RESOURCE_DESTROYED, nullptr);
         return 0;

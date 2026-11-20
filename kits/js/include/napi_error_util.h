@@ -60,6 +60,8 @@ enum Code : int32_t {
 
     TRANSFER_FAILED            = 80001,
 
+    EMULATOR_CAPABILITY_NOT_SUPPORTED = 804,
+    
     PARAM_RANGE_EXCEEDED       = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::PARAM_RANGE_EXCEEDED),
     PARAM_MISMATCH             = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::PARAM_MISMATCH),
     SCENE_DESTROYED            = static_cast<int32_t>(OHOS::Render3D::RenderErrorCode::SCENE_DESTROYED),

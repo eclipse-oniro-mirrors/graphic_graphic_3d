@@ -78,6 +78,14 @@ bool SceneImpl::renderFrame(::taihe::optional_view<::SceneTH::RenderParameters> 
     using result_type = ::taihe::expected<::taihe::array<::SceneResources::RenderTarget>, ::taihe::error>;
     auto [completer, future] = taihe::make_async_pair<result_type>();
 
+#if defined(IS_EMULATOR)
+    WIDGET_LOGE("snapshot: offscreen DMA readback is not supported on the emulator");
+    completer.complete(taihe::unexpected(taihe::error(
+        NapiErrorUtil::ToString(ErrorCode::EMULATOR_CAPABILITY_NOT_SUPPORTED),
+        static_cast<int32_t>(ErrorCode::EMULATOR_CAPABILITY_NOT_SUPPORTED))));
+    return std::move(future);
+#endif
+
     if (cameras.size() != params.size()) {
         WIDGET_LOGE("snapshot: cameras.size(%zu) != params.size(%zu)", cameras.size(), params.size());
         completer.complete(taihe::unexpected(taihe::error(

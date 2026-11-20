@@ -43,6 +43,8 @@ const char* ToString(Code code)
         case ASYNC_INVALID_UID:         return "Invalid UID string";
         case INTERNAL_ERROR:            return "Internal error";
         case TRANSFER_FAILED:           return "Transfer operation failed";
+        case EMULATOR_CAPABILITY_NOT_SUPPORTED:
+            return "The capability is not supported on the emulator at this time.";
         case PARAM_RANGE_EXCEEDED:
             return OHOS::Render3D::ToString(OHOS::Render3D::RenderErrorCode::PARAM_RANGE_EXCEEDED);
         case PARAM_MISMATCH:
